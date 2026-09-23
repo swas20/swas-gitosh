@@ -3,12 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AquaSense Multi-Customer Active Irrigation Dashboard</title>
-  <!-- Tailwind CSS -->
+  <title>AquaSense Multi-Customer Active Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- MQTT.js for Real-time WebSockets -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     @keyframes pulse-slow {
@@ -35,7 +32,7 @@
         </div>
       </div>
 
-      <!-- Network Connection Pill -->
+      <!-- Network Connection Status -->
       <div class="flex items-center gap-4 bg-slate-900/80 px-4 py-2 rounded-full border border-slate-700 text-xs">
         <div class="flex items-center gap-2">
           <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-500 pulse-dot"></span>
@@ -52,14 +49,14 @@
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-    <!-- IP / MQTT Configuration Bar -->
+    <!-- Configuration Bar -->
     <div class="bg-slate-800/90 rounded-xl p-4 border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
       <div class="flex items-center gap-2 text-sm text-slate-300">
         <i data-lucide="settings" class="w-4 h-4 text-cyan-400"></i>
         <span class="font-medium">Master Gateway Address:</span>
       </div>
       <div class="flex items-center gap-3 w-full md:w-auto flex-1 max-w-md">
-        <input id="ip-input" type="text" placeholder="ESP32 IP (e.g. 192.168.1.100) or 'mqtt'" 
+        <input id="ip-input" type="text" placeholder="ESP32 IP or 'mqtt'" 
           class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500">
         <button onclick="saveTargetIP()" 
           class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shrink-0">
@@ -92,7 +89,7 @@
         </div>
       </div>
 
-      <!-- Master Distribution Pump -->
+      <!-- Master Pump Control -->
       <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-md flex flex-col justify-between">
         <div class="flex items-center justify-between mb-2">
           <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -102,7 +99,7 @@
         </div>
         <div class="my-3">
           <div id="master-pump-status" class="text-2xl font-bold text-slate-300">Pump Idle</div>
-          <p class="text-xs text-slate-400 mt-1">Central Main Relay</p>
+          <p class="text-xs text-slate-400 mt-1">Central Distribution Pump</p>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <button onclick="controlMasterPump('on')" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5">
@@ -114,43 +111,41 @@
         </div>
       </div>
 
-      <!-- Active Customers Stats -->
+      <!-- Active Online Customers Stats -->
       <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-md flex flex-col justify-between">
         <div class="flex items-center justify-between mb-2">
           <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i> Online Customers
           </h2>
-          <span id="online-badge" class="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">Live Only</span>
+          <span class="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">Active Nodes</span>
         </div>
         <div class="my-3">
           <div id="online-count-text" class="text-4xl font-extrabold text-white">0</div>
-          <p class="text-xs text-slate-400 mt-1">Active Customer Nodes Transmitting</p>
+          <p class="text-xs text-slate-400 mt-1">Connected Customers Transmitting Data</p>
         </div>
         <div class="flex items-center gap-2 text-xs text-slate-400 pt-2 border-t border-slate-700">
-          <i data-lucide="filter" class="w-4 h-4 text-cyan-400"></i>
-          <span>Hiding offline customer nodes automatically</span>
+          <i data-lucide="radio" class="w-4 h-4 text-cyan-400"></i>
+          <span>Auto-detecting incoming node packets</span>
         </div>
       </div>
     </section>
 
-    <!-- Active Customers Section -->
+    <!-- Active Customers Grid -->
     <section>
       <div class="flex items-center justify-between mb-6">
         <div>
           <h2 class="text-lg font-bold text-white flex items-center gap-2">
             <i data-lucide="user-check" class="w-5 h-5 text-emerald-400"></i> Active Customer Boxes
           </h2>
-          <p class="text-xs text-slate-400">Displaying all real-time sensor metrics and controls for connected customer nodes.</p>
+          <p class="text-xs text-slate-400">Each customer card contains 2 Moisture Sensors, Valve, Pump, Ultrasonic Tank Level, Flow Rate, and DHT22.</p>
         </div>
       </div>
 
-      <!-- Customer Cards Grid -->
       <div id="customer-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        <!-- Default Listening State -->
         <div class="col-span-full bg-slate-800/40 rounded-xl border border-dashed border-slate-700 p-12 text-center">
           <i data-lucide="radio-receiver" class="w-12 h-12 text-slate-600 mx-auto mb-3"></i>
           <p class="text-slate-300 font-medium">Listening for Online Customer Nodes...</p>
-          <p class="text-xs text-slate-500 mt-1">Once a customer node transmits over LoRa, its box will immediately appear here.</p>
+          <p class="text-xs text-slate-500 mt-1">Make sure your LoRa node is powered on and sending data.</p>
         </div>
       </div>
     </section>
@@ -158,7 +153,6 @@
   </main>
 
   <script>
-    // System Configurations
     const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
     const MQTT_LIVE_TOPIC = "aquasense/moses_kaaga_9x7p2/live";
     const MQTT_CMD_TOPIC = "aquasense/moses_kaaga_9x7p2/cmd";
@@ -225,7 +219,7 @@
             const data = JSON.parse(message.toString());
             renderDashboard(data);
           } catch (e) {
-            console.error("MQTT JSON Parse Error:", e);
+            console.error("MQTT Parsing error:", e);
           }
         }
       });
@@ -237,7 +231,7 @@
       try {
         const protocol = targetIP.startsWith("http") ? "" : "http://";
         const res = await fetch(`${protocol}${targetIP}/data`);
-        if (!res.ok) throw new Error("HTTP connection failed");
+        if (!res.ok) throw new Error("HTTP error");
         const data = await res.json();
         updateNetworkStatus(true, `Direct: ${targetIP}`);
         renderDashboard(data);
@@ -246,36 +240,47 @@
       }
     }
 
+    // ROBUST ONLINE CHECK (Handles boolean, numbers, strings, or presence of data)
+    function isNodeOnline(node) {
+      if (!node) return false;
+      if (node.online === true || node.online === 1 || node.online === "1" || node.online === "true" || node.online === "online") {
+        return true;
+      }
+      // Fallback: If 'online' property isn't explicitly set, consider it online if it sent an ID and telemetry
+      if (node.online === undefined && (node.id || node.node || node.nodeId)) {
+        return true;
+      }
+      return false;
+    }
+
     function renderDashboard(data) {
       if (!data) return;
 
-      // 1. Render Master Station Telemetry
-      if (data.master) {
-        const mDist = data.master.distance || 0;
-        document.getElementById("master-tank-distance").innerHTML = `${mDist} <span class="text-lg font-normal text-slate-400">cm</span>`;
-        
-        // Calculate tank percentage assuming 100cm max height
-        const masterPct = Math.max(0, Math.min(100, Math.round(100 - mDist)));
-        document.getElementById("master-tank-bar").style.width = `${masterPct}%`;
-        document.getElementById("master-tank-pct-badge").innerText = `${masterPct}%`;
-
-        const isMasterPumpOn = data.master.pump === "ON";
-        const badge = document.getElementById("master-pump-badge");
-        const statusText = document.getElementById("master-pump-status");
-
-        badge.innerText = isMasterPumpOn ? "RUNNING" : "OFF";
-        badge.className = `text-xs px-2 py-0.5 rounded font-semibold ${isMasterPumpOn ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-700 text-slate-400"}`;
-        
-        statusText.innerText = isMasterPumpOn ? "Main Pump Active" : "Main Pump Idle";
-        statusText.className = `text-2xl font-bold ${isMasterPumpOn ? "text-emerald-400" : "text-slate-300"}`;
-      }
-
-      // 2. Filter & Render ONLY Online Customers
-      const grid = document.getElementById("customer-grid");
-      const allNodes = data.nodes || [];
+      // 1. Render Master Station
+      const master = data.master || data.central || {};
+      const mDist = master.distance || master.dist || 0;
+      document.getElementById("master-tank-distance").innerHTML = `${mDist} <span class="text-lg font-normal text-slate-400">cm</span>`;
       
-      // Strict filter for ONLINE nodes
-      const onlineNodes = allNodes.filter(node => node.online === true);
+      const masterPct = Math.max(0, Math.min(100, Math.round(100 - mDist)));
+      document.getElementById("master-tank-bar").style.width = `${masterPct}%`;
+      document.getElementById("master-tank-pct-badge").innerText = `${masterPct}%`;
+
+      const isMasterPumpOn = master.pump === "ON" || master.pump === 1 || master.pump === "1" || master.pump === true;
+      const badge = document.getElementById("master-pump-badge");
+      const statusText = document.getElementById("master-pump-status");
+
+      badge.innerText = isMasterPumpOn ? "RUNNING" : "OFF";
+      badge.className = `text-xs px-2 py-0.5 rounded font-semibold ${isMasterPumpOn ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-700 text-slate-400"}`;
+      
+      statusText.innerText = isMasterPumpOn ? "Main Pump Active" : "Main Pump Idle";
+      statusText.className = `text-2xl font-bold ${isMasterPumpOn ? "text-emerald-400" : "text-slate-300"}`;
+
+      // 2. Process and Filter Nodes
+      const grid = document.getElementById("customer-grid");
+      const rawNodes = data.nodes || data.customers || [];
+      
+      // Filter using the flexible isNodeOnline helper
+      const onlineNodes = rawNodes.filter(isNodeOnline);
 
       document.getElementById("online-count-text").innerText = onlineNodes.length;
 
@@ -283,17 +288,28 @@
         grid.innerHTML = `
           <div class="col-span-full bg-slate-800/40 rounded-xl border border-dashed border-slate-700 p-12 text-center">
             <i data-lucide="radio-receiver" class="w-12 h-12 text-slate-600 mx-auto mb-3"></i>
-            <p class="text-slate-300 font-medium">No Customer Nodes Online</p>
-            <p class="text-xs text-slate-500 mt-1">Waiting for a customer field node to transmit data...</p>
+            <p class="text-slate-300 font-medium">No Customer Nodes Currently Online</p>
+            <p class="text-xs text-slate-500 mt-1">Waiting for incoming LoRa transmission payload...</p>
           </div>`;
         lucide.createIcons();
         return;
       }
 
-      // Render Individual Customer Box for each Online Customer
+      // Render Individual Customer Cards
       grid.innerHTML = onlineNodes.map(node => {
-        const tankDist = node.distance || 0;
+        const nodeId = node.id || node.node || node.nodeId || "Unknown";
+        const tankDist = node.distance || node.dist || 0;
         const tankPct = Math.max(0, Math.min(100, Math.round(100 - tankDist)));
+
+        const m1 = node.m1 ?? node.moist1 ?? node.moisture1 ?? 0;
+        const m2 = node.m2 ?? node.moist2 ?? node.moisture2 ?? 0;
+        const flow = node.flow ?? node.flowrate ?? 0;
+        const total = node.total ?? node.volume ?? 0;
+        const temp = node.temp ?? node.temperature ?? 0;
+        const hum = node.hum ?? node.humidity ?? 0;
+        const valve = node.valve || "CLOSED";
+        const pump = node.pump || "OFF";
+        const rssi = node.rssi || 0;
 
         return `
           <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 flex flex-col justify-between space-y-4 shadow-xl">
@@ -303,20 +319,20 @@
               <div class="flex items-center gap-2.5">
                 <span class="w-3 h-3 rounded-full bg-emerald-400 pulse-dot"></span>
                 <div>
-                  <h3 class="font-bold text-white text-base">Customer ${node.id}</h3>
-                  <span class="text-xs text-emerald-400 font-medium">Active & Online</span>
+                  <h3 class="font-bold text-white text-base">Customer ${nodeId}</h3>
+                  <span class="text-xs text-emerald-400 font-medium">Active & Transmitting</span>
                 </div>
               </div>
               <span class="text-xs font-mono bg-slate-900 px-2.5 py-1 rounded-md text-slate-400 border border-slate-700/50">
-                RSSI: ${node.rssi || 0} dBm
+                RSSI: ${rssi} dBm
               </span>
             </div>
 
-            <!-- Customer Tank Indicator -->
+            <!-- Ultrasonic Water Tank -->
             <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-700/50">
               <div class="flex items-center justify-between text-xs mb-1.5">
                 <span class="text-slate-300 font-medium flex items-center gap-1.5">
-                  <i data-lucide="container" class="w-4 h-4 text-cyan-400"></i> Ultrasonic Water Tank
+                  <i data-lucide="container" class="w-4 h-4 text-cyan-400"></i> Water Tank Level
                 </span>
                 <span class="font-mono text-cyan-400 font-bold">${tankDist} cm (${tankPct}%)</span>
               </div>
@@ -325,7 +341,7 @@
               </div>
             </div>
 
-            <!-- Sensor Telemetry Details -->
+            <!-- Sensors Grid -->
             <div class="grid grid-cols-2 gap-2 text-xs">
               
               <!-- Soil Moisture 1 -->
@@ -333,7 +349,7 @@
                 <div class="text-slate-400 mb-0.5 flex items-center gap-1">
                   <i data-lucide="sprout" class="w-3.5 h-3.5 text-emerald-400"></i> Moisture 1
                 </div>
-                <div class="text-sm font-bold text-emerald-400">${node.m1 || node.moist1 || 0}%</div>
+                <div class="text-sm font-bold text-emerald-400">${m1}%</div>
                 <div class="text-[10px] text-slate-500">Zone A Sensor</div>
               </div>
 
@@ -342,60 +358,60 @@
                 <div class="text-slate-400 mb-0.5 flex items-center gap-1">
                   <i data-lucide="sprout" class="w-3.5 h-3.5 text-emerald-400"></i> Moisture 2
                 </div>
-                <div class="text-sm font-bold text-emerald-400">${node.m2 || node.moist2 || 0}%</div>
+                <div class="text-sm font-bold text-emerald-400">${m2}%</div>
                 <div class="text-[10px] text-slate-500">Zone B Sensor</div>
               </div>
 
-              <!-- Flow Meter & Total -->
+              <!-- Flow Meter -->
               <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
                 <div class="text-slate-400 mb-0.5 flex items-center gap-1">
                   <i data-lucide="gauge" class="w-3.5 h-3.5 text-cyan-400"></i> Flow Rate
                 </div>
-                <div class="text-sm font-bold text-cyan-300">${node.flow || 0} <span class="text-[10px] text-slate-400">L/min</span></div>
-                <div class="text-[10px] text-slate-500">Total: ${node.total || 0} L</div>
+                <div class="text-sm font-bold text-cyan-300">${flow} <span class="text-[10px] text-slate-400">L/m</span></div>
+                <div class="text-[10px] text-slate-500">Total: ${total} L</div>
               </div>
 
-              <!-- DHT22 Temp & Humidity -->
+              <!-- DHT22 Sensor -->
               <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
                 <div class="text-slate-400 mb-0.5 flex items-center gap-1">
                   <i data-lucide="thermometer" class="w-3.5 h-3.5 text-amber-400"></i> DHT22 Sensor
                 </div>
-                <div class="text-sm font-bold text-amber-300">${node.temp || 0}°C</div>
-                <div class="text-[10px] text-slate-500">Humidity: ${node.hum || 0}%</div>
+                <div class="text-sm font-bold text-amber-300">${temp}°C</div>
+                <div class="text-[10px] text-slate-500">Humidity: ${hum}%</div>
               </div>
 
             </div>
 
-            <!-- Customer Hardware Controls -->
+            <!-- Customer Actuator Controls -->
             <div class="pt-3 border-t border-slate-700/60 space-y-2">
               
               <!-- Valve Control -->
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-300 font-medium flex items-center gap-1">
                   <i data-lucide="git-commit" class="w-3.5 h-3.5 text-purple-400"></i> Valve: 
-                  <strong class="text-white ml-1">${node.valve || 'CLOSED'}</strong>
+                  <strong class="text-white ml-1">${valve}</strong>
                 </span>
                 <div class="flex gap-1.5">
-                  <button onclick="controlValve('${node.id}', 'open')" class="bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-cyan-500/30 transition-colors">
+                  <button onclick="controlValve('${nodeId}', 'open')" class="bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-cyan-500/30 transition-colors">
                     Open
                   </button>
-                  <button onclick="controlValve('${node.id}', 'close')" class="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-rose-500/30 transition-colors">
+                  <button onclick="controlValve('${nodeId}', 'close')" class="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-rose-500/30 transition-colors">
                     Close
                   </button>
                 </div>
               </div>
 
-              <!-- Customer Secondary Pump Control -->
+              <!-- Secondary Pump Control -->
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-300 font-medium flex items-center gap-1">
                   <i data-lucide="power" class="w-3.5 h-3.5 text-emerald-400"></i> Customer Pump: 
-                  <strong class="text-white ml-1">${node.pump || 'OFF'}</strong>
+                  <strong class="text-white ml-1">${pump}</strong>
                 </span>
                 <div class="flex gap-1.5">
-                  <button onclick="controlCustomerPump('${node.id}', 'pump_on')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-emerald-500/30 transition-colors">
+                  <button onclick="controlCustomerPump('${nodeId}', 'pump_on')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-emerald-500/30 transition-colors">
                     Start
                   </button>
-                  <button onclick="controlCustomerPump('${node.id}', 'pump_off')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-2.5 py-1 rounded font-semibold transition-colors">
+                  <button onclick="controlCustomerPump('${nodeId}', 'pump_off')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-2.5 py-1 rounded font-semibold transition-colors">
                     Stop
                   </button>
                 </div>
