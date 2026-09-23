@@ -22,7 +22,7 @@
 
   <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
-    <!-- Dashboard Title Banner (Matches 'TITLE' in sketch) -->
+    <!-- Dashboard Title Banner -->
     <header class="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center shadow-lg relative">
       <h1 class="text-3xl md:text-4xl font-extrabold tracking-wider text-white uppercase border-b-2 border-cyan-500 pb-2 inline-block">
         IRRIGATION MASTER DASHBOARD
@@ -171,36 +171,34 @@
         return;
       }
 
-      // Render customer boxes structured matching the sketch layout
       grid.innerHTML = onlineNodes.map((node, index) => {
         const nodeId = node.id || node.node || `Customer ${index + 1}`;
-        const totalVolume = (node.total ?? node.volume ?? 0.0).toFixed(1);
+        const totalVolume = Number(node.total ?? node.volume ?? 0.0).toFixed(1);
         
         const m1 = node.m1 ?? node.moist1 ?? 0;
         const m2 = node.m2 ?? node.moist2 ?? 0;
         const temp = node.temp ?? node.temperature ?? 0.0;
         const hum = node.hum ?? node.humidity ?? 0.0;
 
-        const valveState = (node.valve || "close").toLowerCase();
-        const pumpState = (node.pump || "close").toLowerCase();
+        const valveState = String(node.valve || "close").toLowerCase();
+        const pumpState = String(node.pump || "close").toLowerCase();
 
         const distance = node.distance || node.dist || 0;
-        // Assuming 100cm tank depth: 0cm distance = 100% full
         const fillPct = Math.max(0, Math.min(100, Math.round(100 - distance)));
         const isFull = fillPct >= 90;
 
         return `
           <div class="bg-slate-800 border-2 border-slate-700 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl text-center">
             
-            <!-- 1. Customer Name & Online Status Header -->
+            <!-- 1. Node Header -->
             <div class="border-b border-slate-700 pb-2">
-              <h2 class="text-xl font-bold text-white tracking-wide">${nodeId}</h2>
+              <h2 class="text-xl font-bold text-white tracking-wide">Node ${nodeId}</h2>
               <span class="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 inline-block mt-1">
                 Online
               </span>
             </div>
 
-            <!-- 2. Large Water Volume Readout (0.0L) -->
+            <!-- 2. Volume -->
             <div class="my-2">
               <div class="text-5xl font-extrabold text-white tracking-tight">
                 ${totalVolume}<span class="text-3xl text-cyan-400 font-bold">L</span>
@@ -208,7 +206,7 @@
               <p class="text-[11px] text-slate-400 uppercase tracking-widest mt-1">Total Flowed Volume</p>
             </div>
 
-            <!-- 3. Telemetry 2x2 Box (Moist 1, Moist 2, Temp, Humid) -->
+            <!-- 3. Telemetry 2x2 Box -->
             <div class="grid grid-cols-2 gap-2 text-xs">
               <div class="bg-slate-900/90 border border-slate-700 rounded-lg p-2">
                 <div class="text-slate-400 font-medium">Moist 1</div>
@@ -228,7 +226,7 @@
               </div>
             </div>
 
-            <!-- 4. Valve Control Section -->
+            <!-- 4. Valve Control -->
             <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/80 space-y-2">
               <div class="flex items-center justify-between text-xs px-1">
                 <span class="font-bold text-slate-300">Valve</span>
@@ -248,7 +246,7 @@
               </div>
             </div>
 
-            <!-- 5. Pump Control Section -->
+            <!-- 5. Pump Control -->
             <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/80 space-y-2">
               <div class="flex items-center justify-between text-xs px-1">
                 <span class="font-bold text-slate-300">Pump</span>
@@ -268,11 +266,9 @@
               </div>
             </div>
 
-            <!-- 6. Water Tank Visualizer with Graduation Marks -->
+            <!-- 6. Water Tank Visualizer -->
             <div class="bg-slate-900 p-3 rounded-xl border border-slate-700 flex items-center gap-3">
-              <!-- Tank Graphic -->
               <div class="w-10 h-20 bg-slate-800 border-2 border-slate-500 rounded-md relative overflow-hidden shrink-0 flex flex-col justify-end">
-                <!-- Graduation Marks -->
                 <div class="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-40 pointer-events-none">
                   <div class="w-full h-0.5 bg-slate-300"></div>
                   <div class="w-2/3 h-0.5 bg-slate-300"></div>
@@ -280,11 +276,9 @@
                   <div class="w-2/3 h-0.5 bg-slate-300"></div>
                   <div class="w-full h-0.5 bg-slate-300"></div>
                 </div>
-                <!-- Water Fill Bar -->
                 <div class="bg-cyan-500 w-full transition-all duration-500" style="height: ${fillPct}%;"></div>
               </div>
 
-              <!-- Tank Status Info -->
               <div class="flex-1 text-left space-y-1">
                 <div class="text-xs font-bold text-slate-300">Water Tank</div>
                 <div class="text-sm font-extrabold text-cyan-400">${distance} cm</div>
@@ -301,7 +295,6 @@
       lucide.createIcons();
     }
 
-    // Command Dispatcher
     async function sendCommand(payload) {
       if (targetIP && targetIP.toLowerCase() !== "mqtt") {
         try {
