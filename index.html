@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AquaSense Smart Irrigation Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MQTT.js CDN for WebSocket connection -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .pulse-dot {
+      animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+  <!-- Header / Navigation -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
+          <i data-lucide="droplets" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            AquaSense Control Center
+          </h1>
+          <p class="text-xs text-slate-400">Master Gateway Monitoring & Control</p>
+        </div>
+      </div>
+
+      <!-- Connection Status Bar -->
+      <div class="flex items-center gap-4 bg-slate-900/60 px-4 py-2 rounded-full border border-slate-700/60 text-xs">
+        <div class="flex items-center gap-2">
+          <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-500 pulse-dot"></span>
+          <span id="status-text" class="font-medium text-slate-300">Connecting...</span>
+        </div>
+        <span class="text-slate-600">|</span>
+        <div class="flex items-center gap-1.5 text-slate-400">
+          <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+          <span id="gateway-ip">IP: Local / MQTT</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- Config & Target IP Input Bar -->
+    <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2 text-sm text-slate-300 w-full md:w-auto">
+        <i data-lucide="settings" class="w-4 h-4 text-cyan-400"></i>
+        <span>Gateway Gateway Target:</span>
+      </div>
+      <div class="flex items-center gap-3 w-full md:w-auto flex-1 max-w-md">
+        <input id="ip-input" type="text" placeholder="Enter ESP32 IP (e.g. 192.168.1.100) or MQTT" 
+          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+        <button id="save-ip-btn" onclick="saveTargetIP()" 
+          class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
+          Connect
+        </button>
+      </div>
+    </div>
+
+    <!-- Master Gateway Controls & Tank Overview -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Master Tank Level Widget -->
+      <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="waves" class="w-4 h-4 text-cyan-400"></i> Water Tank Level
+          </h2>
+          <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Ultrasonic</span>
+        </div>
+        <div class="flex items-end justify-between my-4">
+          <div>
+            <div id="tank-distance" class="text-4xl font-extrabold text-white">0 <span class="text-lg font-normal text-slate-400">cm</span></div>
+            <p class="text-xs text-slate-400 mt-1">Sensor-to-Water Distance</p>
+          </div>
+          <div class="p-3 bg-cyan-500/10 rounded-xl text-cyan-400">
+            <i data-lucide="container" class="w-8 h-8"></i>
+          </div>
+        </div>
+        <div class="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
+          <div id="tank-bar" class="bg-cyan-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Master Pump Control -->
+      <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="power" class="w-4 h-4 text-emerald-400"></i> Main AC Water Pump
+          </h2>
+          <span id="pump-badge" class="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded font-semibold">OFF</span>
+        </div>
+        <div class="my-4">
+          <div id="pump-status-text" class="text-2xl font-bold text-slate-300">Pump Inactive</div>
+          <p class="text-xs text-slate-400 mt-1">Relay PIN 16 Control</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-2">
+          <button onclick="togglePump('on')" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2">
+            <i data-lucide="play" class="w-4 h-4"></i> Turn ON
+          </button>
+          <button onclick="togglePump('off')" class="bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2">
+            <i data-lucide="square" class="w-4 h-4"></i> Turn OFF
+          </button>
+        </div>
+      </div>
+
+      <!-- Node Summary Card -->
+      <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="radio" class="w-4 h-4 text-purple-400"></i> Active LoRa Nodes
+          </h2>
+          <span id="node-count-badge" class="text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded font-bold">0 Nodes</span>
+        </div>
+        <div class="my-4">
+          <div id="online-nodes-text" class="text-4xl font-extrabold text-white">0 <span class="text-lg font-normal text-slate-400">Online</span></div>
+          <p class="text-xs text-slate-400 mt-1">Operating on 866 MHz Frequency</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <i data-lucide="clock" class="w-4 h-4 text-slate-500"></i>
+          <span>Auto-refreshing every 2 seconds</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- LoRa Nodes Grid -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <i data-lucide="cpu" class="w-5 h-5 text-cyan-400"></i> Field Irrigation Nodes
+        </h2>
+      </div>
+
+      <!-- Node Cards Container -->
+      <div id="nodes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Empty State -->
+        <div class="col-span-full bg-slate-800/40 rounded-xl border border-dashed border-slate-700 p-12 text-center">
+          <i data-lucide="radio-receiver" class="w-12 h-12 text-slate-600 mx-auto mb-3"></i>
+          <p class="text-slate-400 font-medium">Waiting for telemetry data from ESP32 Master...</p>
+          <p class="text-xs text-slate-500 mt-1">Make sure your LoRa nodes are powered on and transmitting.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Configuration & State
+    const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+    const MQTT_LIVE_TOPIC = "aquasense/moses_kaaga_9x7p2/live";
+    const MQTT_CMD_TOPIC = "aquasense/moses_kaaga_9x7p2/cmd";
+
+    let targetIP = localStorage.getItem("aquasense_target_ip") || "";
+    let mqttClient = null;
+    let localPollInterval = null;
+
+    // Initialize UI Elements
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      if (targetIP) {
+        document.getElementById("ip-input").value = targetIP;
+      }
+      initConnection();
+    });
+
+    function saveTargetIP() {
+      const input = document.getElementById("ip-input").value.trim();
+      targetIP = input;
+      localStorage.setItem("aquasense_target_ip", targetIP);
+      initConnection();
+    }
+
+    function updateStatus(connected, modeText) {
+      const dot = document.getElementById("status-dot");
+      const text = document.getElementById("status-text");
+      const ipDisplay = document.getElementById("gateway-ip");
+
+      if (connected) {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+        text.innerText = "Connected (" + modeText + ")";
+        text.className = "font-medium text-emerald-400";
+      } else {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500 pulse-dot";
+        text.innerText = "Connecting...";
+        text.className = "font-medium text-amber-400";
+      }
+      ipDisplay.innerText = targetIP ? `Target: ${targetIP}` : "Broker: HiveMQ";
+    }
+
+    // Connection Logic: Prefers HTTP Direct API if Local IP set, falls back to HiveMQ WebSocket
+    function initConnection() {
+      if (localPollInterval) clearInterval(localPollInterval);
+      if (mqttClient) mqttClient.end();
+
+      if (targetIP && targetIP.toLowerCase() !== "mqtt") {
+        // Direct HTTP Polling Mode
+        fetchDataLocal();
+        localPollInterval = setInterval(fetchDataLocal, 2000);
+      } else {
+        // MQTT WebSocket Mode
+        initMQTT();
+      }
+    }
+
+    // MQTT WebSockets Initializer
+    function initMQTT() {
+      updateStatus(false, "MQTT");
+      mqttClient = mqtt.connect(MQTT_BROKER);
+
+      mqttClient.on("connect", () => {
+        updateStatus(true, "MQTT");
+        mqttClient.subscribe(MQTT_LIVE_TOPIC);
+      });
+
+      mqttClient.on("message", (topic, message) => {
+        if (topic === MQTT_LIVE_TOPIC) {
+          try {
+            const data = JSON.parse(message.toString());
+            renderDashboard(data);
+          } catch (e) {
+            console.error("Error parsing MQTT JSON:", e);
+          }
+        }
+      });
+
+      mqttClient.on("error", (err) => {
+        console.error("MQTT Error:", err);
+        updateStatus(false, "MQTT");
+      });
+    }
+
+    // Direct HTTP Polling
+    async function fetchDataLocal() {
+      try {
+        const protocol = targetIP.startsWith("http") ? "" : "http://";
+        const res = await fetch(`${protocol}${targetIP}/data`);
+        if (!res.ok) throw new Error("HTTP error");
+        const data = await res.json();
+        updateStatus(true, "HTTP Direct");
+        renderDashboard(data);
+      } catch (err) {
+        console.warn("Local HTTP fetch failed, trying fallback...", err);
+        updateStatus(false, "HTTP");
+      }
+    }
+
+    // Render Function
+    function renderDashboard(data) {
+      if (!data) return;
+
+      // Update Master Pump & Tank
+      if (data.master) {
+        const dist = data.master.distance || 0;
+        document.getElementById("tank-distance").innerHTML = `${dist} <span class="text-lg font-normal text-slate-400">cm</span>`;
+        
+        // Approximate tank bar depth scaling (0-100cm)
+        const pct = Math.max(0, Math.min(100, 100 - dist));
+        document.getElementById("tank-bar").style.width = `${pct}%`;
+
+        const isPumpOn = data.master.pump === "ON";
+        const badge = document.getElementById("pump-badge");
+        const pumpText = document.getElementById("pump-status-text");
+
+        badge.innerText = isPumpOn ? "RUNNING" : "OFF";
+        badge.className = `text-xs px-2 py-0.5 rounded font-semibold ${isPumpOn ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-700 text-slate-400"}`;
+        
+        pumpText.innerText = isPumpOn ? "Pump Operating" : "Pump Inactive";
+        pumpText.className = `text-2xl font-bold ${isPumpOn ? "text-emerald-400" : "text-slate-300"}`;
+      }
+
+      // Update Nodes
+      const nodesContainer = document.getElementById("nodes-container");
+      const nodes = data.nodes || [];
+
+      document.getElementById("node-count-badge").innerText = `${nodes.length} Nodes`;
+      const onlineCount = nodes.filter(n => n.online).length;
+      document.getElementById("online-nodes-text").innerHTML = `${onlineCount} <span class="text-lg font-normal text-slate-400">Online</span>`;
+
+      if (nodes.length === 0) {
+        nodesContainer.innerHTML = `
+          <div class="col-span-full bg-slate-800/40 rounded-xl border border-dashed border-slate-700 p-12 text-center">
+            <i data-lucide="radio-receiver" class="w-12 h-12 text-slate-600 mx-auto mb-3"></i>
+            <p class="text-slate-400 font-medium">No active LoRa field nodes detected yet.</p>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      nodesContainer.innerHTML = nodes.map(node => `
+        <div class="bg-slate-800 rounded-xl border ${node.online ? 'border-slate-700' : 'border-slate-800 opacity-60'} p-5 flex flex-col justify-between space-y-4">
+          <!-- Node Header -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full ${node.online ? 'bg-emerald-400' : 'bg-slate-600'}"></span>
+              <h3 class="font-bold text-white">Node ${node.id}</h3>
+            </div>
+            <span class="text-xs font-mono bg-slate-900 px-2 py-1 rounded text-slate-400">
+              RSSI: ${node.rssi} dBm
+            </span>
+          </div>
+
+          <!-- Metrics Grid -->
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+              <span class="text-slate-400 block mb-1">Flow Rate</span>
+              <span class="text-base font-bold text-cyan-400">${node.flow} L/min</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+              <span class="text-slate-400 block mb-1">Total Volume</span>
+              <span class="text-base font-bold text-slate-200">${node.total} L</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+              <span class="text-slate-400 block mb-1">Soil Moist 1</span>
+              <span class="text-base font-bold text-emerald-400">${node.m1}%</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+              <span class="text-slate-400 block mb-1">Soil Moist 2</span>
+              <span class="text-base font-bold text-emerald-400">${node.m2}%</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+              <span class="text-slate-400 block mb-1">Temp / Hum</span>
+              <span class="text-base font-bold text-amber-400">${node.temp}°C / ${node.hum}%</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+              <span class="text-slate-400 block mb-1">Node Water Level</span>
+              <span class="text-base font-bold text-purple-400">${node.distance} cm</span>
+            </div>
+          </div>
+
+          <!-- Valve Control Actions -->
+          <div class="pt-2 border-t border-slate-700/50 flex items-center justify-between gap-2">
+            <span class="text-xs text-slate-400">Solenoid Valve: <strong class="text-slate-200">${node.valve || 'UNKNOWN'}</strong></span>
+            <div class="flex gap-2">
+              <button onclick="controlValve('${node.id}', 'open')" class="bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white px-3 py-1 rounded text-xs font-semibold border border-cyan-500/30 transition-colors">
+                Open
+              </button>
+              <button onclick="controlValve('${node.id}', 'close')" class="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white px-3 py-1 rounded text-xs font-semibold border border-rose-500/30 transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join("");
+
+      lucide.createIcons();
+    }
+
+    // Command Dispatcher (Handles HTTP or MQTT Command Routing)
+    async function togglePump(action) {
+      if (targetIP && targetIP.toLowerCase() !== "mqtt") {
+        try {
+          const protocol = targetIP.startsWith("http") ? "" : "http://";
+          await fetch(`${protocol}${targetIP}/pump?action=${action}`);
+        } catch (e) {
+          console.error("Local pump command failed:", e);
+        }
+      } else if (mqttClient && mqttClient.connected) {
+        const payload = JSON.stringify({ pump: action });
+        mqttClient.publish(MQTT_CMD_TOPIC, payload);
+      }
+    }
+
+    async function controlValve(nodeId, action) {
+      if (targetIP && targetIP.toLowerCase() !== "mqtt") {
+        try {
+          const protocol = targetIP.startsWith("http") ? "" : "http://";
+          await fetch(`${protocol}${targetIP}/valve?node=${nodeId}&action=${action}`);
+        } catch (e) {
+          console.error("Local valve command failed:", e);
+        }
+      } else if (mqttClient && mqttClient.connected) {
+        const payload = JSON.stringify({ node: nodeId, action: action });
+        mqttClient.publish(MQTT_CMD_TOPIC, payload);
+      }
+    }
+  </script>
+</body>
+</html>
