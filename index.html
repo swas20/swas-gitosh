@@ -3,154 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AquaSense Multi-Customer Active Dashboard</title>
+  <title>Irrigation Master Dashboard</title>
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MQTT.js -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    @keyframes pulse-slow {
+    @keyframes pulse-dot {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.3; }
     }
-    .pulse-dot { animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    .pulse-dot { animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
   </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
 
-  <!-- Navigation Header -->
-  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 shadow-md">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
-          <i data-lucide="droplets" class="w-6 h-6"></i>
-        </div>
-        <div>
-          <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            AquaSense Active Dashboard
-          </h1>
-          <p class="text-xs text-slate-400">Live Customer Telemetry & Field Controller</p>
-        </div>
-      </div>
+  <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
-      <!-- Network Connection Status -->
-      <div class="flex items-center gap-4 bg-slate-900/80 px-4 py-2 rounded-full border border-slate-700 text-xs">
-        <div class="flex items-center gap-2">
+    <!-- Dashboard Title Banner (Matches 'TITLE' in sketch) -->
+    <header class="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center shadow-lg relative">
+      <h1 class="text-3xl md:text-4xl font-extrabold tracking-wider text-white uppercase border-b-2 border-cyan-500 pb-2 inline-block">
+        IRRIGATION MASTER DASHBOARD
+      </h1>
+      
+      <!-- Connection Indicator Pill -->
+      <div class="mt-4 flex items-center justify-center gap-3 text-xs">
+        <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-700">
           <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-500 pulse-dot"></span>
           <span id="status-text" class="font-medium text-amber-400">Connecting...</span>
         </div>
-        <span class="text-slate-700">|</span>
-        <div class="flex items-center gap-1.5 text-slate-400">
-          <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
-          <span id="target-mode-display">HiveMQ Broker</span>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-    <!-- Configuration Bar -->
-    <div class="bg-slate-800/90 rounded-xl p-4 border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
-      <div class="flex items-center gap-2 text-sm text-slate-300">
-        <i data-lucide="settings" class="w-4 h-4 text-cyan-400"></i>
-        <span class="font-medium">Master Gateway Address:</span>
-      </div>
-      <div class="flex items-center gap-3 w-full md:w-auto flex-1 max-w-md">
         <input id="ip-input" type="text" placeholder="ESP32 IP or 'mqtt'" 
-          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500">
-        <button onclick="saveTargetIP()" 
-          class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shrink-0">
-          <i data-lucide="link" class="w-4 h-4"></i> Connect
+          class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1 text-slate-200 text-xs w-36 focus:outline-none focus:border-cyan-500">
+        <button onclick="saveTargetIP()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded text-xs font-semibold">
+          Set IP
         </button>
       </div>
-    </div>
+    </header>
 
-    <!-- Master Controller Bar -->
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <!-- Master Tank Level -->
-      <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-md flex flex-col justify-between">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-            <i data-lucide="waves" class="w-4 h-4 text-cyan-400"></i> Central Reservoir Tank
-          </h2>
-          <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Master Ultrasonic</span>
-        </div>
-        <div class="my-4 flex items-baseline justify-between">
-          <div>
-            <div id="master-tank-distance" class="text-4xl font-extrabold text-white">-- <span class="text-lg font-normal text-slate-400">cm</span></div>
-            <p class="text-xs text-slate-400 mt-1">Distance to Water</p>
-          </div>
-          <div id="master-tank-pct-badge" class="text-lg font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-lg border border-cyan-500/20">
-            0%
-          </div>
-        </div>
-        <div class="w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-700">
-          <div id="master-tank-bar" class="bg-cyan-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
-        </div>
-      </div>
-
-      <!-- Master Pump Control -->
-      <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-md flex flex-col justify-between">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-            <i data-lucide="power" class="w-4 h-4 text-emerald-400"></i> Master Pump Control
-          </h2>
-          <span id="master-pump-badge" class="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded font-semibold">OFF</span>
-        </div>
-        <div class="my-3">
-          <div id="master-pump-status" class="text-2xl font-bold text-slate-300">Pump Idle</div>
-          <p class="text-xs text-slate-400 mt-1">Central Distribution Pump</p>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <button onclick="controlMasterPump('on')" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5">
-            <i data-lucide="play" class="w-3.5 h-3.5"></i> TURN ON
-          </button>
-          <button onclick="controlMasterPump('off')" class="bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5">
-            <i data-lucide="square" class="w-3.5 h-3.5"></i> TURN OFF
-          </button>
-        </div>
-      </div>
-
-      <!-- Active Online Customers Stats -->
-      <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-md flex flex-col justify-between">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-            <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i> Online Customers
-          </h2>
-          <span class="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">Active Nodes</span>
-        </div>
-        <div class="my-3">
-          <div id="online-count-text" class="text-4xl font-extrabold text-white">0</div>
-          <p class="text-xs text-slate-400 mt-1">Connected Customers Transmitting Data</p>
-        </div>
-        <div class="flex items-center gap-2 text-xs text-slate-400 pt-2 border-t border-slate-700">
-          <i data-lucide="radio" class="w-4 h-4 text-cyan-400"></i>
-          <span>Auto-detecting incoming node packets</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Active Customers Grid -->
-    <section>
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h2 class="text-lg font-bold text-white flex items-center gap-2">
-            <i data-lucide="user-check" class="w-5 h-5 text-emerald-400"></i> Active Customer Boxes
-          </h2>
-          <p class="text-xs text-slate-400">Each customer card contains 2 Moisture Sensors, Valve, Pump, Ultrasonic Tank Level, Flow Rate, and DHT22.</p>
-        </div>
-      </div>
-
-      <div id="customer-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+    <!-- Online Customer Nodes Grid -->
+    <main>
+      <div id="customer-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Default State when no node is connected -->
         <div class="col-span-full bg-slate-800/40 rounded-xl border border-dashed border-slate-700 p-12 text-center">
           <i data-lucide="radio-receiver" class="w-12 h-12 text-slate-600 mx-auto mb-3"></i>
-          <p class="text-slate-300 font-medium">Listening for Online Customer Nodes...</p>
-          <p class="text-xs text-slate-500 mt-1">Make sure your LoRa node is powered on and sending data.</p>
+          <p class="text-slate-300 font-medium text-lg">Listening for Online Customer Nodes...</p>
+          <p class="text-xs text-slate-500 mt-1">Cards will appear automatically once a node transmits over LoRa.</p>
         </div>
       </div>
-    </section>
+    </main>
 
-  </main>
+  </div>
 
   <script>
     const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
@@ -175,10 +79,9 @@
       initNetworkConnection();
     }
 
-    function updateNetworkStatus(connected, modeText) {
+    function updateNetworkStatus(connected) {
       const dot = document.getElementById("status-dot");
       const text = document.getElementById("status-text");
-      const modeDisplay = document.getElementById("target-mode-display");
 
       if (connected) {
         dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
@@ -189,7 +92,6 @@
         text.innerText = "Connecting...";
         text.className = "font-medium text-amber-400";
       }
-      modeDisplay.innerText = modeText;
     }
 
     function initNetworkConnection() {
@@ -205,11 +107,11 @@
     }
 
     function connectMQTT() {
-      updateNetworkStatus(false, "MQTT Broker");
+      updateNetworkStatus(false);
       mqttClient = mqtt.connect(MQTT_BROKER);
 
       mqttClient.on("connect", () => {
-        updateNetworkStatus(true, "MQTT: Live");
+        updateNetworkStatus(true);
         mqttClient.subscribe(MQTT_LIVE_TOPIC);
       });
 
@@ -224,7 +126,7 @@
         }
       });
 
-      mqttClient.on("error", () => updateNetworkStatus(false, "MQTT Error"));
+      mqttClient.on("error", () => updateNetworkStatus(false));
     }
 
     async function fetchHTTPData() {
@@ -233,20 +135,18 @@
         const res = await fetch(`${protocol}${targetIP}/data`);
         if (!res.ok) throw new Error("HTTP error");
         const data = await res.json();
-        updateNetworkStatus(true, `Direct: ${targetIP}`);
+        updateNetworkStatus(true);
         renderDashboard(data);
       } catch (err) {
-        updateNetworkStatus(false, "HTTP Offline");
+        updateNetworkStatus(false);
       }
     }
 
-    // ROBUST ONLINE CHECK (Handles boolean, numbers, strings, or presence of data)
     function isNodeOnline(node) {
       if (!node) return false;
       if (node.online === true || node.online === 1 || node.online === "1" || node.online === "true" || node.online === "online") {
         return true;
       }
-      // Fallback: If 'online' property isn't explicitly set, consider it online if it sent an ID and telemetry
       if (node.online === undefined && (node.id || node.node || node.nodeId)) {
         return true;
       }
@@ -256,167 +156,142 @@
     function renderDashboard(data) {
       if (!data) return;
 
-      // 1. Render Master Station
-      const master = data.master || data.central || {};
-      const mDist = master.distance || master.dist || 0;
-      document.getElementById("master-tank-distance").innerHTML = `${mDist} <span class="text-lg font-normal text-slate-400">cm</span>`;
-      
-      const masterPct = Math.max(0, Math.min(100, Math.round(100 - mDist)));
-      document.getElementById("master-tank-bar").style.width = `${masterPct}%`;
-      document.getElementById("master-tank-pct-badge").innerText = `${masterPct}%`;
-
-      const isMasterPumpOn = master.pump === "ON" || master.pump === 1 || master.pump === "1" || master.pump === true;
-      const badge = document.getElementById("master-pump-badge");
-      const statusText = document.getElementById("master-pump-status");
-
-      badge.innerText = isMasterPumpOn ? "RUNNING" : "OFF";
-      badge.className = `text-xs px-2 py-0.5 rounded font-semibold ${isMasterPumpOn ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-700 text-slate-400"}`;
-      
-      statusText.innerText = isMasterPumpOn ? "Main Pump Active" : "Main Pump Idle";
-      statusText.className = `text-2xl font-bold ${isMasterPumpOn ? "text-emerald-400" : "text-slate-300"}`;
-
-      // 2. Process and Filter Nodes
       const grid = document.getElementById("customer-grid");
       const rawNodes = data.nodes || data.customers || [];
-      
-      // Filter using the flexible isNodeOnline helper
       const onlineNodes = rawNodes.filter(isNodeOnline);
-
-      document.getElementById("online-count-text").innerText = onlineNodes.length;
 
       if (onlineNodes.length === 0) {
         grid.innerHTML = `
           <div class="col-span-full bg-slate-800/40 rounded-xl border border-dashed border-slate-700 p-12 text-center">
             <i data-lucide="radio-receiver" class="w-12 h-12 text-slate-600 mx-auto mb-3"></i>
-            <p class="text-slate-300 font-medium">No Customer Nodes Currently Online</p>
-            <p class="text-xs text-slate-500 mt-1">Waiting for incoming LoRa transmission payload...</p>
+            <p class="text-slate-300 font-medium text-lg">No Customer Nodes Online</p>
+            <p class="text-xs text-slate-500 mt-1">Waiting for incoming LoRa transmission...</p>
           </div>`;
         lucide.createIcons();
         return;
       }
 
-      // Render Individual Customer Cards
-      grid.innerHTML = onlineNodes.map(node => {
-        const nodeId = node.id || node.node || node.nodeId || "Unknown";
-        const tankDist = node.distance || node.dist || 0;
-        const tankPct = Math.max(0, Math.min(100, Math.round(100 - tankDist)));
+      // Render customer boxes structured matching the sketch layout
+      grid.innerHTML = onlineNodes.map((node, index) => {
+        const nodeId = node.id || node.node || `Customer ${index + 1}`;
+        const totalVolume = (node.total ?? node.volume ?? 0.0).toFixed(1);
+        
+        const m1 = node.m1 ?? node.moist1 ?? 0;
+        const m2 = node.m2 ?? node.moist2 ?? 0;
+        const temp = node.temp ?? node.temperature ?? 0.0;
+        const hum = node.hum ?? node.humidity ?? 0.0;
 
-        const m1 = node.m1 ?? node.moist1 ?? node.moisture1 ?? 0;
-        const m2 = node.m2 ?? node.moist2 ?? node.moisture2 ?? 0;
-        const flow = node.flow ?? node.flowrate ?? 0;
-        const total = node.total ?? node.volume ?? 0;
-        const temp = node.temp ?? node.temperature ?? 0;
-        const hum = node.hum ?? node.humidity ?? 0;
-        const valve = node.valve || "CLOSED";
-        const pump = node.pump || "OFF";
-        const rssi = node.rssi || 0;
+        const valveState = (node.valve || "close").toLowerCase();
+        const pumpState = (node.pump || "close").toLowerCase();
+
+        const distance = node.distance || node.dist || 0;
+        // Assuming 100cm tank depth: 0cm distance = 100% full
+        const fillPct = Math.max(0, Math.min(100, Math.round(100 - distance)));
+        const isFull = fillPct >= 90;
 
         return `
-          <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 flex flex-col justify-between space-y-4 shadow-xl">
+          <div class="bg-slate-800 border-2 border-slate-700 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl text-center">
             
-            <!-- Customer Box Header -->
-            <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
-              <div class="flex items-center gap-2.5">
-                <span class="w-3 h-3 rounded-full bg-emerald-400 pulse-dot"></span>
-                <div>
-                  <h3 class="font-bold text-white text-base">Customer ${nodeId}</h3>
-                  <span class="text-xs text-emerald-400 font-medium">Active & Transmitting</span>
-                </div>
-              </div>
-              <span class="text-xs font-mono bg-slate-900 px-2.5 py-1 rounded-md text-slate-400 border border-slate-700/50">
-                RSSI: ${rssi} dBm
+            <!-- 1. Customer Name & Online Status Header -->
+            <div class="border-b border-slate-700 pb-2">
+              <h2 class="text-xl font-bold text-white tracking-wide">${nodeId}</h2>
+              <span class="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 inline-block mt-1">
+                Online
               </span>
             </div>
 
-            <!-- Ultrasonic Water Tank -->
-            <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-700/50">
-              <div class="flex items-center justify-between text-xs mb-1.5">
-                <span class="text-slate-300 font-medium flex items-center gap-1.5">
-                  <i data-lucide="container" class="w-4 h-4 text-cyan-400"></i> Water Tank Level
-                </span>
-                <span class="font-mono text-cyan-400 font-bold">${tankDist} cm (${tankPct}%)</span>
+            <!-- 2. Large Water Volume Readout (0.0L) -->
+            <div class="my-2">
+              <div class="text-5xl font-extrabold text-white tracking-tight">
+                ${totalVolume}<span class="text-3xl text-cyan-400 font-bold">L</span>
               </div>
-              <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700">
-                <div class="bg-cyan-500 h-full rounded-full transition-all duration-300" style="width: ${tankPct}%"></div>
-              </div>
+              <p class="text-[11px] text-slate-400 uppercase tracking-widest mt-1">Total Flowed Volume</p>
             </div>
 
-            <!-- Sensors Grid -->
+            <!-- 3. Telemetry 2x2 Box (Moist 1, Moist 2, Temp, Humid) -->
             <div class="grid grid-cols-2 gap-2 text-xs">
-              
-              <!-- Soil Moisture 1 -->
-              <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
-                <div class="text-slate-400 mb-0.5 flex items-center gap-1">
-                  <i data-lucide="sprout" class="w-3.5 h-3.5 text-emerald-400"></i> Moisture 1
-                </div>
-                <div class="text-sm font-bold text-emerald-400">${m1}%</div>
-                <div class="text-[10px] text-slate-500">Zone A Sensor</div>
+              <div class="bg-slate-900/90 border border-slate-700 rounded-lg p-2">
+                <div class="text-slate-400 font-medium">Moist 1</div>
+                <div class="text-base font-bold text-emerald-400 mt-0.5">${m1}%</div>
               </div>
-
-              <!-- Soil Moisture 2 -->
-              <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
-                <div class="text-slate-400 mb-0.5 flex items-center gap-1">
-                  <i data-lucide="sprout" class="w-3.5 h-3.5 text-emerald-400"></i> Moisture 2
-                </div>
-                <div class="text-sm font-bold text-emerald-400">${m2}%</div>
-                <div class="text-[10px] text-slate-500">Zone B Sensor</div>
+              <div class="bg-slate-900/90 border border-slate-700 rounded-lg p-2">
+                <div class="text-slate-400 font-medium">Moist 2</div>
+                <div class="text-base font-bold text-emerald-400 mt-0.5">${m2}%</div>
               </div>
-
-              <!-- Flow Meter -->
-              <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
-                <div class="text-slate-400 mb-0.5 flex items-center gap-1">
-                  <i data-lucide="gauge" class="w-3.5 h-3.5 text-cyan-400"></i> Flow Rate
-                </div>
-                <div class="text-sm font-bold text-cyan-300">${flow} <span class="text-[10px] text-slate-400">L/m</span></div>
-                <div class="text-[10px] text-slate-500">Total: ${total} L</div>
+              <div class="bg-slate-900/90 border border-slate-700 rounded-lg p-2">
+                <div class="text-slate-400 font-medium">Temp</div>
+                <div class="text-base font-bold text-amber-400 mt-0.5">${temp}°C</div>
               </div>
-
-              <!-- DHT22 Sensor -->
-              <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
-                <div class="text-slate-400 mb-0.5 flex items-center gap-1">
-                  <i data-lucide="thermometer" class="w-3.5 h-3.5 text-amber-400"></i> DHT22 Sensor
-                </div>
-                <div class="text-sm font-bold text-amber-300">${temp}°C</div>
-                <div class="text-[10px] text-slate-500">Humidity: ${hum}%</div>
+              <div class="bg-slate-900/90 border border-slate-700 rounded-lg p-2">
+                <div class="text-slate-400 font-medium">Humid</div>
+                <div class="text-base font-bold text-cyan-400 mt-0.5">${hum}%</div>
               </div>
-
             </div>
 
-            <!-- Customer Actuator Controls -->
-            <div class="pt-3 border-t border-slate-700/60 space-y-2">
-              
-              <!-- Valve Control -->
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-300 font-medium flex items-center gap-1">
-                  <i data-lucide="git-commit" class="w-3.5 h-3.5 text-purple-400"></i> Valve: 
-                  <strong class="text-white ml-1">${valve}</strong>
+            <!-- 4. Valve Control Section -->
+            <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/80 space-y-2">
+              <div class="flex items-center justify-between text-xs px-1">
+                <span class="font-bold text-slate-300">Valve</span>
+                <span class="px-2 py-0.5 rounded text-[11px] font-bold ${valveState === 'open' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-slate-700 text-slate-400'}">
+                  ${valveState.toUpperCase()}
                 </span>
-                <div class="flex gap-1.5">
-                  <button onclick="controlValve('${nodeId}', 'open')" class="bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-cyan-500/30 transition-colors">
-                    Open
-                  </button>
-                  <button onclick="controlValve('${nodeId}', 'close')" class="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-rose-500/30 transition-colors">
-                    Close
-                  </button>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="controlValve('${nodeId}', 'open')" 
+                  class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition-colors shadow">
+                  Open
+                </button>
+                <button onclick="controlValve('${nodeId}', 'close')" 
+                  class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-1.5 px-3 rounded-lg text-xs transition-colors border border-slate-600">
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <!-- 5. Pump Control Section -->
+            <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/80 space-y-2">
+              <div class="flex items-center justify-between text-xs px-1">
+                <span class="font-bold text-slate-300">Pump</span>
+                <span class="px-2 py-0.5 rounded text-[11px] font-bold ${pumpState === 'open' || pumpState === 'on' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'}">
+                  ${(pumpState === 'open' || pumpState === 'on') ? 'OPEN' : 'CLOSE'}
+                </span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="controlCustomerPump('${nodeId}', 'pump_on')" 
+                  class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition-colors shadow">
+                  Open
+                </button>
+                <button onclick="controlCustomerPump('${nodeId}', 'pump_off')" 
+                  class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-1.5 px-3 rounded-lg text-xs transition-colors border border-slate-600">
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <!-- 6. Water Tank Visualizer with Graduation Marks -->
+            <div class="bg-slate-900 p-3 rounded-xl border border-slate-700 flex items-center gap-3">
+              <!-- Tank Graphic -->
+              <div class="w-10 h-20 bg-slate-800 border-2 border-slate-500 rounded-md relative overflow-hidden shrink-0 flex flex-col justify-end">
+                <!-- Graduation Marks -->
+                <div class="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-40 pointer-events-none">
+                  <div class="w-full h-0.5 bg-slate-300"></div>
+                  <div class="w-2/3 h-0.5 bg-slate-300"></div>
+                  <div class="w-full h-0.5 bg-slate-300"></div>
+                  <div class="w-2/3 h-0.5 bg-slate-300"></div>
+                  <div class="w-full h-0.5 bg-slate-300"></div>
                 </div>
+                <!-- Water Fill Bar -->
+                <div class="bg-cyan-500 w-full transition-all duration-500" style="height: ${fillPct}%;"></div>
               </div>
 
-              <!-- Secondary Pump Control -->
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-300 font-medium flex items-center gap-1">
-                  <i data-lucide="power" class="w-3.5 h-3.5 text-emerald-400"></i> Customer Pump: 
-                  <strong class="text-white ml-1">${pump}</strong>
+              <!-- Tank Status Info -->
+              <div class="flex-1 text-left space-y-1">
+                <div class="text-xs font-bold text-slate-300">Water Tank</div>
+                <div class="text-sm font-extrabold text-cyan-400">${distance} cm</div>
+                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${isFull ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+                  ${isFull ? 'FULL' : `${fillPct}% Level`}
                 </span>
-                <div class="flex gap-1.5">
-                  <button onclick="controlCustomerPump('${nodeId}', 'pump_on')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white px-2.5 py-1 rounded font-semibold border border-emerald-500/30 transition-colors">
-                    Start
-                  </button>
-                  <button onclick="controlCustomerPump('${nodeId}', 'pump_off')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-2.5 py-1 rounded font-semibold transition-colors">
-                    Stop
-                  </button>
-                </div>
               </div>
-
             </div>
 
           </div>
@@ -426,7 +301,7 @@
       lucide.createIcons();
     }
 
-    // Command Dispatching
+    // Command Dispatcher
     async function sendCommand(payload) {
       if (targetIP && targetIP.toLowerCase() !== "mqtt") {
         try {
@@ -434,19 +309,10 @@
           let params = new URLSearchParams(payload).toString();
           await fetch(`${protocol}${targetIP}/valve?${params}`);
         } catch (e) {
-          console.error("Local command failed:", e);
+          console.error("Command send error:", e);
         }
       } else if (mqttClient && mqttClient.connected) {
         mqttClient.publish(MQTT_CMD_TOPIC, JSON.stringify(payload));
-      }
-    }
-
-    function controlMasterPump(action) {
-      if (targetIP && targetIP.toLowerCase() !== "mqtt") {
-        const protocol = targetIP.startsWith("http") ? "" : "http://";
-        fetch(`${protocol}${targetIP}/pump?action=${action}`).catch(console.error);
-      } else if (mqttClient && mqttClient.connected) {
-        mqttClient.publish(MQTT_CMD_TOPIC, JSON.stringify({ pump: action }));
       }
     }
 
