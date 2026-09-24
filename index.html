@@ -1,1114 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta
-  name="viewport"
-  content="width=device-width, initial-scale=1.0"
->
-
-<title>AquaSense Irrigation Dashboard</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title> Irrigation Dashboard - Ultrasonic</title>
 <script src="https://cdn.tailwindcss.com"></script>
-
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
+<style>
+.tank-wave{position:absolute;top:-8px;left:0;width:200%;height:16px;background:radial-gradient(ellipse at center,rgba(255,255,255,0.3) 0%,transparent 70%);animation:wave 3s linear infinite}
+@keyframes wave{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.water-fill{transition:height 1s ease-in-out}
+</style>
 </head>
-
-
 <body class="bg-slate-900 text-white min-h-screen">
-
-
 <div class="max-w-7xl mx-auto px-4 py-6">
-
-
-<!-- ===================================================== -->
-<!-- HEADER -->
-<!-- ===================================================== -->
-
-<header
-  class="bg-slate-800 rounded-2xl p-6 mb-6 text-center"
->
-
-<h1 class="text-3xl md:text-4xl font-bold">
-AQUASENSE
-</h1>
-
-<p class="text-cyan-400 mt-2">
-IRRIGATION MASTER DASHBOARD
-</p>
-
-
+<header class="bg-slate-800 rounded-2xl p-6 mb-6 text-center">
+<h1 class="text-3xl md:text-4xl font-bold">AQUASENSE</h1>
+<p class="text-cyan-400 mt-2">IRRIGATION MASTER DASHBOARD C</p>
 <div class="mt-4 flex justify-center items-center gap-2">
-
-<span
-  id="statusDot"
-  class="w-3 h-3 rounded-full bg-yellow-500"
-></span>
-
-<span id="statusText">
-Connecting to MQTT...
-</span>
-
+<span id="statusDot" class="w-3 h-3 rounded-full bg-yellow-500"></span>
+<span id="statusText">Connecting to MQTT...</span>
 </div>
-
 </header>
-
-
-<!-- ===================================================== -->
-<!-- NODE COUNT -->
-<!-- ===================================================== -->
-
-<div
-  class="bg-slate-800 rounded-xl p-4 mb-6"
->
-
-<div class="flex justify-between">
-
-<span>
-Connected Customer Nodes
-</span>
-
-<span
-  id="nodeCount"
-  class="font-bold text-cyan-400"
->
-0
-</span>
-
+<div class="bg-slate-800 rounded-xl p-4 mb-6">
+<div class="flex justify-between"><span>Connected Customer Nodes</span><span id="nodeCount" class="font-bold text-cyan-400">0</span></div>
 </div>
-
+<div id="customerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center"><p class="text-slate-400">Waiting for customer nodes...</p></div>
 </div>
-
-
-<!-- ===================================================== -->
-<!-- CUSTOMER GRID -->
-<!-- ===================================================== -->
-
-<div
-  id="customerGrid"
-  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
->
-
-<div
-  class="col-span-full bg-slate-800 rounded-xl p-10 text-center"
->
-
-<p class="text-slate-400">
-Waiting for customer nodes...
-</p>
-
 </div>
-
-</div>
-
-
-</div>
-
-
 <script>
-
-/* =========================================================
-   MQTT SETTINGS
-   ========================================================= */
-
-const MQTT_BROKER =
-  "wss://broker.hivemq.com:8884/mqtt";
-
-
-const MQTT_LIVE_TOPIC =
-  "aquasense/moses_kaaga_9x7p2/live";
-
-
-const MQTT_CMD_TOPIC =
-  "aquasense/moses_kaaga_9x7p2/cmd";
-
-
-/* =========================================================
-   MQTT CLIENT
-   ========================================================= */
-
-let mqttClient = null;
-
-
-/* =========================================================
-   STORE NODES
-   ========================================================= */
-
-const nodes = {};
-
-
-/* =========================================================
-   CONNECT MQTT
-   ========================================================= */
-
-function connectMQTT() {
-
-  updateStatus(
-    false,
-    "Connecting to MQTT..."
-  );
-
-
-  console.log(
-    "Connecting to:",
-    MQTT_BROKER
-  );
-
-
-  mqttClient = mqtt.connect(
-    MQTT_BROKER,
-    {
-      reconnectPeriod: 3000,
-      connectTimeout: 10000,
-      clean: true
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     CONNECTED
-     ------------------------------------------------------- */
-
-  mqttClient.on(
-    "connect",
-    function() {
-
-      console.log(
-        "MQTT CONNECTED"
-      );
-
-
-      updateStatus(
-        true,
-        "MQTT Connected"
-      );
-
-
-      mqttClient.subscribe(
-        MQTT_LIVE_TOPIC,
-        function(error) {
-
-          if (error) {
-
-            console.error(
-              "Subscription error:",
-              error
-            );
-
-          } else {
-
-            console.log(
-              "Subscribed to:",
-              MQTT_LIVE_TOPIC
-            );
-
-          }
-
-        }
-      );
-
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     MESSAGE
-     ------------------------------------------------------- */
-
-  mqttClient.on(
-    "message",
-    function(topic, message) {
-
-      console.log(
-        "MQTT RX:",
-        topic,
-        message.toString()
-      );
-
-
-      if (
-        topic !== MQTT_LIVE_TOPIC
-      ) {
-
-        return;
-      }
-
-
-      try {
-
-        const data =
-          JSON.parse(
-            message.toString()
-          );
-
-
-        processLiveData(data);
-
-      }
-
-      catch(error) {
-
-        console.error(
-          "JSON ERROR:",
-          error
-        );
-
-      }
-
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     ERROR
-     ------------------------------------------------------- */
-
-  mqttClient.on(
-    "error",
-    function(error) {
-
-      console.error(
-        "MQTT ERROR:",
-        error
-      );
-
-
-      updateStatus(
-        false,
-        "MQTT Error"
-      );
-
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     OFFLINE
-     ------------------------------------------------------- */
-
-  mqttClient.on(
-    "offline",
-    function() {
-
-      updateStatus(
-        false,
-        "MQTT Offline"
-      );
-
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     RECONNECT
-     ------------------------------------------------------- */
-
-  mqttClient.on(
-    "reconnect",
-    function() {
-
-      updateStatus(
-        false,
-        "Reconnecting..."
-      );
-
-    }
-  );
-
+const MQTT_BROKER="wss://broker.hivemq.com:8884/mqtt";
+const MQTT_LIVE_TOPIC="aquasense/moses_kaaga_9x7p2/live";
+const MQTT_CMD_TOPIC="aquasense/moses_kaaga_9x7p2/cmd";
+const TANK_HEIGHT_CM=100;
+let mqttClient=null;
+const nodes={};
+function connectMQTT(){
+  updateStatus(false,"Connecting to MQTT...");
+  mqttClient=mqtt.connect(MQTT_BROKER,{reconnectPeriod:3000,connectTimeout:10000,clean:true});
+  mqttClient.on("connect",function(){
+    updateStatus(true,"MQTT Connected");
+    mqttClient.subscribe(MQTT_LIVE_TOPIC);
+  });
+  mqttClient.on("message",function(topic,message){
+    if(topic!==MQTT_LIVE_TOPIC) return;
+    try{processLiveData(JSON.parse(message.toString()));}catch(e){console.error(e);}
+  });
+  mqttClient.on("error",function(){updateStatus(false,"MQTT Error");});
+  mqttClient.on("offline",function(){updateStatus(false,"MQTT Offline");});
+  mqttClient.on("reconnect",function(){updateStatus(false,"Reconnecting...");});
 }
-
-
-/* =========================================================
-   STATUS
-   ========================================================= */
-
-function updateStatus(
-  connected,
-  text
-) {
-
-  const dot =
-    document.getElementById(
-      "statusDot"
-    );
-
-
-  const status =
-    document.getElementById(
-      "statusText"
-    );
-
-
-  status.textContent =
-    text;
-
-
-  if (connected) {
-
-    dot.className =
-      "w-3 h-3 rounded-full bg-green-500";
-
-    status.className =
-      "text-green-400";
-
-  }
-
-  else {
-
-    dot.className =
-      "w-3 h-3 rounded-full bg-yellow-500";
-
-    status.className =
-      "text-yellow-400";
-
-  }
-
+function updateStatus(connected,text){
+  const dot=document.getElementById("statusDot");
+  const status=document.getElementById("statusText");
+  status.textContent=text;
+  dot.className=connected?"w-3 h-3 rounded-full bg-green-500":"w-3 h-3 rounded-full bg-yellow-500";
+  status.className=connected?"text-green-400":"text-yellow-400";
 }
-
-
-/* =========================================================
-   PROCESS LIVE DATA
-   ========================================================= */
-
-function processLiveData(data) {
-
-  console.log(
-    "LIVE DATA:",
-    data
-  );
-
-
-  /*
-     Master sends:
-
-     {
-       "nodes": [
-         {...},
-         {...}
-       ]
-     }
-  */
-
-
-  if (
-    !data ||
-    !Array.isArray(data.nodes)
-  ) {
-
-    console.error(
-      "Invalid node data"
-    );
-
-    return;
+function getTankMetrics(node){
+  const rawDistance=node.ultrasonic??node.ultra??node.distance??node.dist_cm??null;
+  const rawTank=node.tank??node.tank_level??node.level??node.water_level??node.tank_percent??null;
+  let distanceCm=0,levelPct=0;
+  if(rawTank!==null&&!isNaN(Number(rawTank))){
+    levelPct=Number(rawTank);
+    distanceCm=(rawDistance!==null&&!isNaN(Number(rawDistance)))?Number(rawDistance):(TANK_HEIGHT_CM-(levelPct/100)*TANK_HEIGHT_CM);
+  }else if(rawDistance!==null&&!isNaN(Number(rawDistance))){
+    distanceCm=Number(rawDistance);
+    levelPct=100-(distanceCm/TANK_HEIGHT_CM*100);
   }
-
-
-  /* -------------------------------------------------------
-     Update node list
-     ------------------------------------------------------- */
-
-  data.nodes.forEach(
-    function(node) {
-
-      if (
-        node.id === undefined ||
-        node.id === null
-      ) {
-
-        return;
-      }
-
-
-      nodes[node.id] = {
-
-        ...node,
-
-        lastDashboardUpdate:
-          Date.now()
-
-      };
-
-    }
-  );
-
-
+  levelPct=Math.max(0,Math.min(100,levelPct));
+  return{distanceCm:Number(distanceCm.toFixed(1)),levelPct:Number(levelPct.toFixed(1))};
+}
+function getTankVisuals(level){
+  if(level<10) return{gradient:"from-red-500 to-red-600",status:"CRITICAL",badge:"bg-red-500/20 text-red-400 border-red-500/30",pulse:"animate-pulse"};
+  if(level<30) return{gradient:"from-amber-400 to-orange-500",status:"LOW",badge:"bg-amber-500/20 text-amber-400 border-amber-500/30",pulse:""};
+  if(level<70) return{gradient:"from-cyan-400 to-blue-500",status:"NORMAL",badge:"bg-cyan-500/15 text-cyan-400 border-cyan-500/20",pulse:""};
+  return{gradient:"from-blue-400 to-blue-600",status:"FULL",badge:"bg-blue-500/20 text-blue-300 border-blue-400/30",pulse:""};
+}
+function processLiveData(data){
+  if(!data||!Array.isArray(data.nodes)) return;
+  data.nodes.forEach(function(node){
+    if(node.id===undefined||node.id===null) return;
+    nodes[node.id]={...node,lastDashboardUpdate:Date.now()};
+  });
   renderDashboard();
-
 }
-
-
-/* =========================================================
-   CHECK ONLINE
-   ========================================================= */
-
-function isOnline(node) {
-
-  if (!node) {
-
-    return false;
-  }
-
-
-  if (
-    node.online === true ||
-    node.online === 1 ||
-    node.online === "true" ||
-    node.online === "1"
-  ) {
-
-    return true;
-  }
-
-
-  return false;
-
+function isOnline(node){
+  return node.online===true||node.online===1||node.online==="true"||node.online==="1";
 }
-
-
-/* =========================================================
-   RENDER DASHBOARD
-   ========================================================= */
-
-function renderDashboard() {
-
-  const grid =
-    document.getElementById(
-      "customerGrid"
-    );
-
-
-  const nodeIDs =
-    Object.keys(nodes);
-
-
-  document.getElementById(
-    "nodeCount"
-  ).textContent =
-    nodeIDs.length;
-
-
-  if (
-    nodeIDs.length === 0
-  ) {
-
-    grid.innerHTML = `
-
-      <div
-        class="col-span-full
-               bg-slate-800
-               rounded-xl
-               p-10
-               text-center"
-      >
-
-        <p class="text-slate-400">
-          Waiting for customer nodes...
-        </p>
-
-      </div>
-
-    `;
-
+function renderDashboard(){
+  const grid=document.getElementById("customerGrid");
+  const nodeIDs=Object.keys(nodes);
+  document.getElementById("nodeCount").textContent=nodeIDs.length;
+  if(nodeIDs.length===0){
+    grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center"><p class="text-slate-400">Waiting for customer nodes...</p></div>`;
     return;
   }
-
-
-  grid.innerHTML =
-    nodeIDs.map(
-      function(id) {
-
-        return createNodeCard(
-          nodes[id]
-        );
-
-      }
-    ).join("");
-
+  grid.innerHTML=nodeIDs.map(function(id){return createNodeCard(nodes[id]);}).join("");
 }
-
-
-/* =========================================================
-   NODE CARD
-   ========================================================= */
-
-function createNodeCard(node) {
-
-  const id =
-    node.id;
-
-
-  const online =
-    isOnline(node);
-
-
-  const flow =
-    Number(
-      node.flow || 0
-    ).toFixed(2);
-
-
-  const total =
-    Number(
-      node.total || 0
-    ).toFixed(2);
-
-
-  const m1 =
-    Number(
-      node.m1 || node.moist1 || 0
-    ).toFixed(0);
-
-
-  const m2 =
-    Number(
-      node.m2 || node.moist2 || 0
-    ).toFixed(0);
-
-
-  const temp =
-    Number(
-      node.temp || node.temperature || 0
-    ).toFixed(1);
-
-
-  const hum =
-    Number(
-      node.hum || node.humidity || 0
-    ).toFixed(1);
-
-
-  const rssi =
-    node.rssi || 0;
-
-
-  const valve =
-    String(
-      node.valve || "close"
-    ).toLowerCase();
-
-
-  const pump =
-    String(
-      node.pump || "off"
-    ).toLowerCase();
-
-
+function createNodeCard(node){
+  const id=node.id;
+  const online=isOnline(node);
+  const flow=Number(node.flow||0).toFixed(2);
+  const total=Number(node.total||0).toFixed(2);
+  const m1=Number(node.m1||node.moist1||0).toFixed(0);
+  const m2=Number(node.m2||node.moist2||0).toFixed(0);
+  const temp=Number(node.temp||node.temperature||0).toFixed(1);
+  const hum=Number(node.hum||node.humidity||0).toFixed(1);
+  const rssi=node.rssi||0;
+  const valve=String(node.valve||"close").toLowerCase();
+  const pump=String(node.pump||"off").toLowerCase();
+  const {distanceCm,levelPct}=getTankMetrics(node);
+  const vis=getTankVisuals(levelPct);
   return `
-
-  <div
-    class="
-      bg-slate-800
-      border
-      border-slate-700
-      rounded-2xl
-      p-5
-      shadow-xl
-    "
-  >
-
-    <!-- ========================================= -->
-    <!-- NODE HEADER -->
-    <!-- ========================================= -->
-
-    <div
-      class="
-        flex
-        justify-between
-        items-center
-        border-b
-        border-slate-700
-        pb-3
-        mb-4
-      "
-    >
-
-      <div>
-
-        <h2
-          class="text-xl font-bold"
-        >
-          Customer ${id}
-        </h2>
-
-        <p
-          class="text-xs text-slate-400"
-        >
-          Node ID: ${id}
-        </p>
-
-      </div>
-
-
-      <span
-        class="
-          px-3
-          py-1
-          rounded-full
-          text-xs
-          font-bold
-          ${online
-            ? "bg-green-500/20 text-green-400"
-            : "bg-red-500/20 text-red-400"}
-        "
-      >
-
-        ${online ? "ONLINE" : "OFFLINE"}
-
-      </span>
-
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl flex flex-col">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
+      <div><h2 class="text-xl font-bold">Customer ${id}</h2><p class="text-xs text-slate-400">Node ID: ${id}</p></div>
+      <span class="px-3 py-1 rounded-full text-xs font-bold ${online?"bg-green-500/20 text-green-400":"bg-red-500/20 text-red-400"}">${online?"ONLINE":"OFFLINE"}</span>
     </div>
-
-
-    <!-- ========================================= -->
-    <!-- FLOW -->
-    <!-- ========================================= -->
-
-    <div
-      class="
-        bg-slate-900
-        rounded-xl
-        p-4
-        text-center
-        mb-4
-      "
-    >
-
-      <p
-        class="text-xs text-slate-400"
-      >
-        CURRENT FLOW
-      </p>
-
-
-      <div
-        class="
-          text-4xl
-          font-bold
-          text-cyan-400
-          mt-1
-        "
-      >
-
-        ${flow}
-
-        <span
-          class="text-lg"
-        >
-          L/min
-        </span>
-
-      </div>
-
+    <div class="bg-slate-900 rounded-xl p-4 text-center mb-4">
+      <p class="text-xs text-slate-400">CURRENT FLOW</p>
+      <div class="text-4xl font-bold text-cyan-400 mt-1">${flow} <span class="text-lg">L/min</span></div>
     </div>
-
-
-    <!-- ========================================= -->
-    <!-- TOTAL WATER -->
-    <!-- ========================================= -->
-
-    <div
-      class="
-        bg-slate-900
-        rounded-xl
-        p-4
-        text-center
-        mb-4
-      "
-    >
-
-      <p
-        class="text-xs text-slate-400"
-      >
-        TOTAL WATER
-      </p>
-
-
-      <div
-        class="
-          text-3xl
-          font-bold
-          text-blue-400
-        "
-      >
-
-        ${total} L
-
-      </div>
-
+    <div class="bg-slate-900 rounded-xl p-4 text-center mb-4">
+      <p class="text-xs text-slate-400">TOTAL WATER</p>
+      <div class="text-3xl font-bold text-blue-400">${total} L</div>
     </div>
-
-
-    <!-- ========================================= -->
-    <!-- SENSOR DATA -->
-    <!-- ========================================= -->
-
-    <div
-      class="
-        grid
-        grid-cols-2
-        gap-3
-        mb-4
-      "
-    >
-
-      <div
-        class="
-          bg-slate-900
-          rounded-lg
-          p-3
-          text-center
-        "
-      >
-
-        <p
-          class="text-xs text-slate-400"
-        >
-          Moisture 1
-        </p>
-
-        <p
-          class="text-lg font-bold text-green-400"
-        >
-          ${m1}%
-        </p>
-
+    <div class="bg-slate-900 rounded-xl p-4 mb-4 border border-slate-700/50">
+      <div class="flex justify-between items-center mb-3">
+        <span class="text-xs font-bold tracking-widest text-slate-300">WATER TANK</span>
+        <span class="px-2.5 py-0.5 rounded text- font-bold border ${vis.badge} ${vis.pulse}">${vis.status} • ${levelPct}%</span>
       </div>
-
-
-      <div
-        class="
-          bg-slate-900
-          rounded-lg
-          p-3
-          text-center
-        "
-      >
-
-        <p
-          class="text-xs text-slate-400"
-        >
-          Moisture 2
-        </p>
-
-        <p
-          class="text-lg font-bold text-green-400"
-        >
-          ${m2}%
-        </p>
-
+      <div class="grid grid-cols-[110px_1fr] gap-4 items-end">
+        <div class="relative w- h- bg-slate-800 rounded-b- rounded-t- border-2 border-slate-600 overflow-hidden mx-auto">
+          <div class="absolute left-1 top-0 bottom-0 w- flex flex-col justify-between py-2 z-10 opacity-40">
+            <div class="w-full h- bg-slate-400"></div><div class="w-full h- bg-slate-500"></div>
+            <div class="w-full h- bg-slate-400"></div><div class="w-full h- bg-slate-500"></div>
+            <div class="w-full h- bg-slate-400"></div>
+          </div>
+          <div class="absolute bottom-0 left-0 right-0 water-fill bg-gradient-to-t ${vis.gradient} ${vis.pulse}" style="height:${levelPct}%">
+            <div class="tank-wave"></div>
+            ${levelPct>20?`<div class="absolute inset-0 flex items-center justify-center text-white font-bold text-sm drop-shadow">${levelPct}%</div>`:``}
+          </div>
+          <div class="absolute -top-1 left-0 right-0 h-2 bg-slate-600 rounded-t-lg"></div>
+        </div>
+        <div class="space-y-3">
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700/50">
+            <p class="text- text-slate-400 tracking-widest">ULTRASONIC</p>
+            <p class="text-xl font-bold text-cyan-300 mt-1">${distanceCm} <span class="text-xs font-normal text-slate-400">cm</span></p>
+            <p class="text- text-slate-500 mt-1">Distance to water</p>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700/50">
+            <p class="text- text-slate-400 tracking-widest">LEVEL</p>
+            <p class="text-xl font-bold text-blue-300 mt-1">${levelPct} <span class="text-xs font-normal text-slate-400">%</span></p>
+            <div class="w-full h-1.5 bg-slate-700 rounded-full mt-2 overflow-hidden"><div class="h-full bg-gradient-to-r ${vis.gradient}" style="width:${levelPct}%"></div></div>
+          </div>
+          <div class="text- text-slate-500">${levelPct<10?'⚠️ Critical - Refill!':levelPct<30?'⚠️ Low - Refill soon':levelPct>90?'✓ Nearly full':'✓ Stable'}</div>
+        </div>
       </div>
-
-
-      <div
-        class="
-          bg-slate-900
-          rounded-lg
-          p-3
-          text-center
-        "
-      >
-
-        <p
-          class="text-xs text-slate-400"
-        >
-          Temperature
-        </p>
-
-        <p
-          class="text-lg font-bold text-yellow-400"
-        >
-          ${temp}°C
-        </p>
-
-      </div>
-
-
-      <div
-        class="
-          bg-slate-900
-          rounded-lg
-          p-3
-          text-center
-        "
-      >
-
-        <p
-          class="text-xs text-slate-400"
-        >
-          Humidity
-        </p>
-
-        <p
-          class="text-lg font-bold text-cyan-400"
-        >
-          ${hum}%
-        </p>
-
-      </div>
-
     </div>
-
-
-    <!-- ========================================= -->
-    <!-- VALVE -->
-    <!-- ========================================= -->
-
-    <div
-      class="
-        bg-slate-900
-        rounded-xl
-        p-4
-        mb-4
-      "
-    >
-
-      <div
-        class="
-          flex
-          justify-between
-          mb-3
-        "
-      >
-
-        <span
-          class="font-bold"
-        >
-          Valve
-        </span>
-
-
-        <span
-          class="
-            px-3
-            py-1
-            rounded
-            text-xs
-            font-bold
-            ${valve === "open"
-              ? "bg-green-500/20 text-green-400"
-              : "bg-red-500/20 text-red-400"}
-          "
-        >
-
-          ${valve.toUpperCase()}
-
-        </span>
-
-      </div>
-
-
-      <div
-        class="
-          grid
-          grid-cols-2
-          gap-2
-        "
-      >
-
-        <button
-          onclick="sendCommand(${id}, 'open')"
-          class="
-            bg-green-600
-            hover:bg-green-500
-            py-2
-            rounded-lg
-            font-bold
-          "
-        >
-          OPEN
-        </button>
-
-
-        <button
-          onclick="sendCommand(${id}, 'close')"
-          class="
-            bg-red-600
-            hover:bg-red-500
-            py-2
-            rounded-lg
-            font-bold
-          "
-        >
-          CLOSE
-        </button>
-
-      </div>
-
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-slate-900 rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Moisture 1</p><p class="text-lg font-bold text-green-400">${m1}%</p></div>
+      <div class="bg-slate-900 rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Moisture 2</p><p class="text-lg font-bold text-green-400">${m2}%</p></div>
+      <div class="bg-slate-900 rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Temperature</p><p class="text-lg font-bold text-yellow-400">${temp}°C</p></div>
+      <div class="bg-slate-900 rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Humidity</p><p class="text-lg font-bold text-cyan-400">${hum}%</p></div>
     </div>
-
-
-    <!-- ========================================= -->
-    <!-- PUMP -->
-    <!-- ========================================= -->
-
-    <div
-      class="
-        bg-slate-900
-        rounded-xl
-        p-4
-      "
-    >
-
-      <div
-        class="
-          flex
-          justify-between
-          mb-3
-        "
-      >
-
-        <span
-          class="font-bold"
-        >
-          Pump
-        </span>
-
-
-        <span
-          class="
-            px-3
-            py-1
-            rounded
-            text-xs
-            font-bold
-            ${pump === "on"
-              ? "bg-green-500/20 text-green-400"
-              : "bg-red-500/20 text-red-400"}
-          "
-        >
-
-          ${pump === "on"
-            ? "ON"
-            : "OFF"}
-
-        </span>
-
-      </div>
-
-
-      <div
-        class="
-          grid
-          grid-cols-2
-          gap-2
-        "
-      >
-
-        <button
-          onclick="sendCommand(${id}, 'pump_on')"
-          class="
-            bg-green-600
-            hover:bg-green-500
-            py-2
-            rounded-lg
-            font-bold
-          "
-        >
-          ON
-        </button>
-
-
-        <button
-          onclick="sendCommand(${id}, 'pump_off')"
-          class="
-            bg-red-600
-            hover:bg-red-500
-            py-2
-            rounded-lg
-            font-bold
-          "
-        >
-          OFF
-        </button>
-
-      </div>
-
+    <div class="bg-slate-900 rounded-xl p-4 mb-4">
+      <div class="flex justify-between mb-3"><span class="font-bold">Valve</span><span class="px-3 py-1 rounded text-xs font-bold ${valve==="open"?"bg-green-500/20 text-green-400":"bg-red-500/20 text-red-400"}">${valve.toUpperCase()}</span></div>
+      <div class="grid grid-cols-2 gap-2"><button onclick="sendCommand(${id},'open')" class="bg-green-600 hover:bg-green-500 py-2 rounded-lg font-bold">OPEN</button><button onclick="sendCommand(${id},'close')" class="bg-red-600 hover:bg-red-500 py-2 rounded-lg font-bold">CLOSE</button></div>
     </div>
-
-
-    <!-- ========================================= -->
-    <!-- RSSI -->
-    <!-- ========================================= -->
-
-    <div
-      class="
-        text-center
-        text-xs
-        text-slate-500
-        mt-4
-      "
-    >
-
-      LoRa RSSI:
-      ${rssi} dBm
-
+    <div class="bg-slate-900 rounded-xl p-4">
+      <div class="flex justify-between mb-3"><span class="font-bold">Pump</span><span class="px-3 py-1 rounded text-xs font-bold ${pump==="on"?"bg-green-500/20 text-green-400":"bg-red-500/20 text-red-400"}">${pump==="on"?"ON":"OFF"}</span></div>
+      <div class="grid grid-cols-2 gap-2"><button onclick="sendCommand(${id},'pump_on')" class="bg-green-600 hover:bg-green-500 py-2 rounded-lg font-bold">ON</button><button onclick="sendCommand(${id},'pump_off')" class="bg-red-600 hover:bg-red-500 py-2 rounded-lg font-bold">OFF</button></div>
     </div>
-
-
-  </div>
-
-  `;
-
+    <div class="text-center text-xs text-slate-500 mt-4">LoRa RSSI: ${rssi} dBm • ${distanceCm}cm → ${levelPct}%</div>
+  </div>`;
 }
-
-
-/* =========================================================
-   SEND COMMAND
-   ========================================================= */
-
-function sendCommand(
-  nodeID,
-  command
-) {
-
-  if (
-    !mqttClient ||
-    !mqttClient.connected
-  ) {
-
-    alert(
-      "MQTT is not connected."
-    );
-
-    return;
-  }
-
-
-  const payload = {
-
-    id: Number(nodeID),
-
-    cmd: command
-
-  };
-
-
-  console.log(
-    "MQTT COMMAND:",
-    payload
-  );
-
-
-  mqttClient.publish(
-    MQTT_CMD_TOPIC,
-    JSON.stringify(payload)
-  );
-
+function sendCommand(nodeID,command){
+  if(!mqttClient||!mqttClient.connected){alert("MQTT not connected");return;}
+  mqttClient.publish(MQTT_CMD_TOPIC,JSON.stringify({id:Number(nodeID),cmd:command}));
 }
-
-
-/* =========================================================
-   START
-   ========================================================= */
-
 connectMQTT();
-
 </script>
-
 </body>
-
 </html>
