@@ -3,30 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AquaSense - Fixed Tank</title>
+<title>AquaSense - Fit Screen</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-.water-fill{transition:height 1s ease-in-out; position:absolute; bottom:0; left:0; right:0;}
-.tank-wave{position:absolute; top:-6px; left:0; width:200%; height:12px; background:rgba(255,255,255,0.3); border-radius:50%; animation:wave 2s linear infinite}
-@keyframes wave{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+*{box-sizing:border-box}
+html,body{height:100%; overflow:hidden}
+body{display:flex; flex-direction:column}
+#customerGrid{overflow-y:auto}
+#customerGrid::-webkit-scrollbar{width:6px}
+#customerGrid::-webkit-scrollbar-thumb{background:#334155; border-radius:10px}
+.water-fill{transition:height 0.8s ease; position:absolute; bottom:0; left:0; right:0}
 </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen">
-<div class="max-w-7xl mx-auto px-4 py-6">
-<header class="bg-slate-800 rounded-2xl p-6 mb-6 text-center">
-<h1 class="text-3xl font-bold">AQUASENSE</h1>
-<p class="text-cyan-400 mt-2">IRRIGATION MASTER + ULTRASONIC TANK</p>
-<div class="mt-4 flex justify-center items-center gap-2">
-<span id="statusDot" class="w-3 h-3 rounded-full bg-yellow-500"></span>
-<span id="statusText">Connecting to MQTT...</span>
+<body class="bg-slate-900 text-white h-screen">
+<div class="flex flex-col h-screen max-w- mx-auto w-full px-3 py-2 gap-2">
+
+<!-- HEADER COMPACT -->
+<header class="bg-slate-800 rounded-xl px-4 py-2 flex justify-between items-center shrink-0">
+<div class="flex items-center gap-4">
+<h1 class="text-xl font-bold">AQUASENSE</h1>
+<p class="text-cyan-400 text-xs hidden md:block">IRRIGATION MASTER + ULTRASONIC</p>
+</div>
+<div class="flex items-center gap-3">
+<span id="nodeCount" class="font-bold text-cyan-400 text-sm">0</span><span class="text-xs text-slate-400">nodes</span>
+<span id="statusDot" class="w-2 h-2 rounded-full bg-yellow-500"></span>
+<span id="statusText" class="text-xs">Connecting...</span>
 </div>
 </header>
-<div class="bg-slate-800 rounded-xl p-4 mb-6 flex justify-between"><span>Connected Nodes</span><span id="nodeCount" class="font-bold text-cyan-400">0</span></div>
-<div id="customerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center"><p class="text-slate-400">Waiting for nodes...</p></div>
+
+<!-- GRID - FITS SCREEN -->
+<div id="customerGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 content-start flex-1">
+<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center text-slate-400">Waiting for nodes...</div>
 </div>
+
 </div>
+
 <script>
 const MQTT_BROKER="wss://broker.hivemq.com:8884/mqtt";
 const MQTT_LIVE_TOPIC="aquasense/moses_kaaga_9x7p2/live";
@@ -35,128 +47,110 @@ const TANK_HEIGHT_CM=100;
 let mqttClient=null; const nodes={};
 
 function connectMQTT(){
-  updateStatus(false,"Connecting...");
+  document.getElementById("statusText").textContent="Connecting...";
   mqttClient=mqtt.connect(MQTT_BROKER,{reconnectPeriod:3000,connectTimeout:10000,clean:true});
-  mqttClient.on("connect",()=>{updateStatus(true,"MQTT Connected"); mqttClient.subscribe(MQTT_LIVE_TOPIC);});
-  mqttClient.on("message",(t,m)=>{ if(t!==MQTT_LIVE_TOPIC) return; try{processLiveData(JSON.parse(m.toString()))}catch(e){} });
-  mqttClient.on("error",()=>updateStatus(false,"MQTT Error"));
-  mqttClient.on("offline",()=>updateStatus(false,"Offline"));
-  mqttClient.on("reconnect",()=>updateStatus(false,"Reconnecting..."));
-}
-function updateStatus(c,t){
-  document.getElementById("statusText").textContent=t;
-  document.getElementById("statusDot").className=c?"w-3 h-3 rounded-full bg-green-500":"w-3 h-3 rounded-full bg-yellow-500";
+  mqttClient.on("connect",()=>{document.getElementById("statusText").textContent="MQTT Connected"; document.getElementById("statusDot").className="w-2 h-2 rounded-full bg-green-500"; mqttClient.subscribe(MQTT_LIVE_TOPIC);});
+  mqttClient.on("message",(t,m)=>{ if(t!==MQTT_LIVE_TOPIC) return; try{processLiveData(JSON.parse(m.toString()))}catch(e){}});
+  mqttClient.on("error",()=>{document.getElementById("statusText").textContent="Error"; document.getElementById("statusDot").className="w-2 h-2 rounded-full bg-red-500";});
+  mqttClient.on("offline",()=>{document.getElementById("statusText").textContent="Offline"; document.getElementById("statusDot").className="w-2 h-2 rounded-full bg-yellow-500";});
 }
 function getTankMetrics(node){
   const d=node.ultrasonic??node.ultra??node.distance??node.dist_cm??null;
   const l=node.tank??node.tank_level??node.level??node.water_level??node.tank_percent??null;
-  let dist=0, pct=0;
-  if(l!==null&&!isNaN(l)){ pct=Number(l); dist=(d!==null?Number(d):(TANK_HEIGHT_CM-(pct/100)*TANK_HEIGHT_CM)); }
-  else if(d!==null&&!isNaN(d)){ dist=Number(d); pct=100-(dist/TANK_HEIGHT_CM*100); }
-  pct=Math.max(0,Math.min(100,pct));
-  return {distanceCm:dist.toFixed(1), levelPct:pct.toFixed(1), levelNum:pct};
+  let dist=0,pct=0;
+  if(l!==null&&!isNaN(l)){pct=Number(l); dist=d!==null?Number(d):(TANK_HEIGHT_CM-(pct/100)*TANK_HEIGHT_CM);}
+  else if(d!==null){dist=Number(d); pct=100-(dist/TANK_HEIGHT_CM*100);}
+  pct=Math.max(0,Math.min(100,pct)); return {distanceCm:dist.toFixed(0), levelPct:pct.toFixed(0), levelNum:pct};
 }
-function processLiveData(data){
-  if(!data||!Array.isArray(data.nodes)) return;
-  data.nodes.forEach(n=>{ if(n.id!=null) nodes[n.id]={...n}; });
-  renderDashboard();
-}
-function isOnline(n){ return n.online===true||n.online===1||n.online==="true"||n.online==="1"; }
+function processLiveData(data){ if(!data||!Array.isArray(data.nodes)) return; data.nodes.forEach(n=>{if(n.id!=null) nodes[n.id]={...n}}); renderDashboard(); }
+function isOnline(n){ return n.online===true||n.online===1||n.online==="true"; }
+
 function renderDashboard(){
   const ids=Object.keys(nodes);
   document.getElementById("nodeCount").textContent=ids.length;
   const grid=document.getElementById("customerGrid");
-  if(ids.length===0){ grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center text-slate-400">Waiting for nodes...</div>`; return; }
+  if(ids.length===0){ grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center text-slate-400">Waiting...</div>`; return; }
   grid.innerHTML=ids.map(id=>createNodeCard(nodes[id])).join("");
 }
+
 function createNodeCard(node){
   const id=node.id;
   const online=isOnline(node);
-  const flow=Number(node.flow||0).toFixed(2);
-  const total=Number(node.total||0).toFixed(2);
+  const flow=Number(node.flow||0).toFixed(1);
+  const total=Number(node.total||0).toFixed(0);
   const m1=Number(node.m1||node.moist1||0).toFixed(0);
   const m2=Number(node.m2||node.moist2||0).toFixed(0);
-  const temp=Number(node.temp||0).toFixed(1);
-  const hum=Number(node.hum||0).toFixed(1);
-  const rssi=node.rssi||0;
+  const temp=Number(node.temp||0).toFixed(0);
+  const hum=Number(node.hum||0).toFixed(0);
   const valve=String(node.valve||"close").toLowerCase();
   const pump=String(node.pump||"off").toLowerCase();
   const {distanceCm,levelPct,levelNum}=getTankMetrics(node);
 
   let waterColor, badge, status;
-  if(levelNum<10){ waterColor="linear-gradient(to top,#ef4444,#dc2626)"; badge="bg-red-500/20 text-red-400 border-red-500"; status="CRITICAL"; }
-  else if(levelNum<30){ waterColor="linear-gradient(to top,#f59e0b,#f97316)"; badge="bg-amber-500/20 text-amber-400 border-amber-500"; status="LOW"; }
-  else if(levelNum<70){ waterColor="linear-gradient(to top,#22d3ee,#3b82f6)"; badge="bg-cyan-500/20 text-cyan-400 border-cyan-500"; status="NORMAL"; }
-  else { waterColor="linear-gradient(to top,#60a5fa,#2563eb)"; badge="bg-blue-500/20 text-blue-300 border-blue-500"; status="FULL"; }
+  if(levelNum<10){ waterColor="linear-gradient(to top,#ef4444,#dc2626)"; badge="bg-red-500/20 text-red-400"; status="CRIT"; }
+  else if(levelNum<30){ waterColor="linear-gradient(to top,#f59e0b,#f97316)"; badge="bg-amber-500/20 text-amber-400"; status="LOW"; }
+  else if(levelNum<70){ waterColor="linear-gradient(to top,#22d3ee,#3b82f6)"; badge="bg-cyan-500/20 text-cyan-400"; status="OK"; }
+  else { waterColor="linear-gradient(to top,#60a5fa,#2563eb)"; badge="bg-blue-500/20 text-blue-300"; status="FULL"; }
 
   return `
-  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl">
-    <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
-      <div><h2 class="text-xl font-bold">Customer ${id}</h2><p class="text-xs text-slate-400">ID:${id}</p></div>
-      <span class="px-3 py-1 rounded-full text-xs font-bold ${online?'bg-green-500/20 text-green-400':'bg-red-500/20 text-red-400'}">${online?'ONLINE':'OFFLINE'}</span>
-    </div>
-    <div class="bg-slate-900 rounded-xl p-4 text-center mb-3"><p class="text-xs text-slate-400">FLOW</p><div class="text-3xl font-bold text-cyan-400">${flow} L/min</div></div>
-    <div class="bg-slate-900 rounded-xl p-4 text-center mb-3"><p class="text-xs text-slate-400">TOTAL</p><div class="text-2xl font-bold text-blue-400">${total} L</div></div>
-
-    <!-- TANK FIXED - VISIBLE COLOR -->
-    <div class="bg-slate-900 rounded-xl p-4 mb-4 border border-slate-700">
-      <div class="flex justify-between mb-3">
-        <span class="text-xs font-bold text-slate-300">WATER TANK - ULTRASONIC</span>
-        <span class="px-2 py-0.5 rounded text- font-bold border ${badge}">${status} ${levelPct}%</span>
+  <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex flex-col h- shrink-0">
+    <!-- Top -->
+    <div class="flex justify-between items-center mb-2 shrink-0">
+      <h2 class="font-bold text-sm">Customer ${id}</h2>
+      <div class="flex gap-1 items-center">
+        <span class="text- px-1.5 py-0.5 rounded border ${badge}">${status} ${levelPct}%</span>
+        <span class="w-2 h-2 rounded-full ${online?'bg-green-500':'bg-red-500'}"></span>
       </div>
-      <div class="flex gap-4">
-        <!-- Visual Tank -->
-        <div style="width:110px; height:150px; background:#1e293b; border:3px solid #475569; border-top:4px solid #475569; border-radius:8px 8px 20px 20px; position:relative; overflow:hidden; flex-shrink:0;">
-          <!-- water with INLINE color - always visible -->
-          <div class="water-fill" style="height:${levelPct}%; background:${waterColor}; ${levelNum<10?'animation: pulse 1s infinite':''}">
-            <div class="tank-wave"></div>
-            <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size:14px; text-shadow:0 1px 2px black;">${levelNum>15?levelPct+'%':''}</div>
-          </div>
-          <!-- scale -->
-          <div style="position:absolute; right:2px; top:5px; bottom:10px; display:flex; flex-direction:column; justify-content:space-between; opacity:0.5;">
-            <div style="width:8px; height:2px; background:#94a3b8;"></div>
-            <div style="width:5px; height:1px; background:#64748b;"></div>
-            <div style="width:8px; height:2px; background:#94a3b8;"></div>
-            <div style="width:5px; height:1px; background:#64748b;"></div>
-            <div style="width:8px; height:2px; background:#94a3b8;"></div>
-          </div>
+    </div>
+
+    <!-- Flow + Tank Row -->
+    <div class="grid grid-cols-[1fr_70px] gap-2 mb-2 shrink-0">
+      <div class="space-y-2">
+        <div class="bg-slate-900 rounded-lg px-2 py-1 flex justify-between items-center">
+          <span class="text- text-slate-400">FLOW</span><span class="text-sm font-bold text-cyan-400">${flow} L/m</span>
         </div>
-        <!-- Data -->
-        <div style="flex:1;" class="space-y-2">
-          <div class="bg-slate-800 rounded-lg p-3">
-            <p class="text- text-slate-400">ULTRASONIC DISTANCE</p>
-            <p class="text-2xl font-bold text-cyan-300">${distanceCm}<span class="text-sm text-slate-400"> cm</span></p>
-          </div>
-          <div class="bg-slate-800 rounded-lg p-3">
-            <p class="text- text-slate-400">WATER LEVEL</p>
-            <p class="text-2xl font-bold text-white">${levelPct}<span class="text-sm text-slate-400"> %</span></p>
-            <div style="width:100%; height:8px; background:#334155; border-radius:4px; margin-top:6px; overflow:hidden;">
-              <div style="height:100%; width:${levelPct}%; background:${waterColor}; border-radius:4px; transition:width 1s;"></div>
-            </div>
-          </div>
-          <p class="text- ${levelNum<30?'text-amber-400':'text-slate-400'}">${levelNum<10?'🔴 REFILL NOW!':levelNum<30?'🟡 Low level':levelNum>90?'🔵 Tank Full':'🟢 Normal'}</p>
+        <div class="bg-slate-900 rounded-lg px-2 py-1 flex justify-between items-center">
+          <span class="text- text-slate-400">TOTAL</span><span class="text-sm font-bold text-blue-400">${total} L</span>
+        </div>
+        <div class="bg-slate-900 rounded-lg p-2">
+          <div class="flex justify-between"><span class="text- text-slate-400">ULTRA</span><span class="text- font-bold text-cyan-300">${distanceCm}cm</span></div>
+          <div class="flex justify-between"><span class="text- text-slate-400">LEVEL</span><span class="text- font-bold text-white">${levelPct}%</span></div>
+          <div style="height:4px; background:#334155; border-radius:2px; margin-top:4px; overflow:hidden;"><div style="height:100%; width:${levelPct}%; background:${waterColor};"></div></div>
+        </div>
+      </div>
+      <!-- Tank Visual - Small -->
+      <div style="width:70px; height:95px; background:#1e293b; border:2px solid #475569; border-radius:6px 6px 12px 12px; position:relative; overflow:hidden;">
+        <div class="water-fill" style="height:${levelPct}%; background:${waterColor};">
+          <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size:10px; text-shadow:0 1px 1px black;">${levelNum>25?levelPct+'%':''}</div>
         </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-2 mb-3">
-      <div class="bg-slate-900 rounded-lg p-2 text-center"><p class="text-xs text-slate-400">Moist1</p><p class="text-green-400 font-bold">${m1}%</p></div>
-      <div class="bg-slate-900 rounded-lg p-2 text-center"><p class="text-xs text-slate-400">Moist2</p><p class="text-green-400 font-bold">${m2}%</p></div>
-      <div class="bg-slate-900 rounded-lg p-2 text-center"><p class="text-xs text-slate-400">Temp</p><p class="text-yellow-400 font-bold">${temp}°C</p></div>
-      <div class="bg-slate-900 rounded-lg p-2 text-center"><p class="text-xs text-slate-400">Hum</p><p class="text-cyan-400 font-bold">${hum}%</p></div>
+    <!-- Sensors 2x2 small -->
+    <div class="grid grid-cols-4 gap-1 mb-2 shrink-0">
+      <div class="bg-slate-900 rounded px-1 py-1 text-center"><p class="text- text-slate-400">M1</p><p class="text- font-bold text-green-400">${m1}%</p></div>
+      <div class="bg-slate-900 rounded px-1 py-1 text-center"><p class="text- text-slate-400">M2</p><p class="text- font-bold text-green-400">${m2}%</p></div>
+      <div class="bg-slate-900 rounded px-1 py-1 text-center"><p class="text- text-slate-400">TEMP</p><p class="text- font-bold text-yellow-400">${temp}°</p></div>
+      <div class="bg-slate-900 rounded px-1 py-1 text-center"><p class="text- text-slate-400">HUM</p><p class="text- font-bold text-cyan-400">${hum}%</p></div>
     </div>
-    <div class="bg-slate-900 rounded-xl p-3 mb-3 flex justify-between items-center"><span>Valve ${valve.toUpperCase()}</span><div class="flex gap-2"><button onclick="sendCommand(${id},'open')" class="bg-green-600 px-4 py-1 rounded font-bold">OPEN</button><button onclick="sendCommand(${id},'close')" class="bg-red-600 px-4 py-1 rounded font-bold">CLOSE</button></div></div>
-    <div class="bg-slate-900 rounded-xl p-3 flex justify-between items-center"><span>Pump ${pump.toUpperCase()}</span><div class="flex gap-2"><button onclick="sendCommand(${id},'pump_on')" class="bg-green-600 px-4 py-1 rounded font-bold">ON</button><button onclick="sendCommand(${id},'pump_off')" class="bg-red-600 px-4 py-1 rounded font-bold">OFF</button></div></div>
-    <div class="text-center text-xs text-slate-500 mt-3">RSSI ${rssi}dBm | ${distanceCm}cm → ${levelPct}%</div>
+
+    <!-- Controls compact -->
+    <div class="mt-auto grid grid-cols-2 gap-1 shrink-0">
+      <div class="flex gap-1">
+        <button onclick="sendCommand(${id},'open')" class="flex-1 bg-green-600 hover:bg-green-500 text- py-1 rounded font-bold">O</button>
+        <button onclick="sendCommand(${id},'close')" class="flex-1 bg-red-600 hover:bg-red-500 text- py-1 rounded font-bold">C</button>
+      </div>
+      <div class="flex gap-1">
+        <button onclick="sendCommand(${id},'pump_on')" class="flex-1 bg-green-600 hover:bg-green-500 text- py-1 rounded font-bold">P-ON</button>
+        <button onclick="sendCommand(${id},'pump_off')" class="flex-1 bg-slate-700 hover:bg-slate-600 text- py-1 rounded font-bold">P-OFF</button>
+      </div>
+    </div>
+    <div class="text- text-slate-500 text-center mt-1">${valve}/${pump} • RSSI ${node.rssi||0}dBm</div>
   </div>`;
 }
-function sendCommand(id,cmd){
-  if(!mqttClient||!mqttClient.connected){alert("MQTT offline");return;}
-  mqttClient.publish(MQTT_CMD_TOPIC,JSON.stringify({id:Number(id),cmd:cmd}));
-}
+function sendCommand(id,cmd){ if(!mqttClient||!mqttClient.connected){alert("MQTT offline");return;} mqttClient.publish(MQTT_CMD_TOPIC,JSON.stringify({id:Number(id),cmd:cmd})); }
 connectMQTT();
-// Demo if no real data in 2 sec
-setTimeout(()=>{ if(Object.keys(nodes).length===0){ processLiveData({nodes:[{id:1,online:true,flow:5.2,total:120,ultrasonic:20,tank_level:80,m1:60,m2:65,temp:24,hum:60,rssi:-60,valve:"open",pump:"on"},{id:2,online:true,flow:0,total:45,ultrasonic:70,tank_level:30,m1:30,m2:35,temp:26,hum:55,rssi:-75,valve:"close",pump:"off"},{id:3,online:true,flow:1.1,total:200,ultrasonic:95,tank_level:5,m1:20,m2:22,temp:28,hum:50,rssi:-80,valve:"close",pump:"off"}]}); } },2000);
+setTimeout(()=>{ if(Object.keys(nodes).length===0){ processLiveData({nodes:[{id:1,online:true,flow:5.2,total:120,ultrasonic:20,tank_level:80,m1:60,m2:65,temp:24,hum:60,rssi:-60,valve:"open",pump:"on"},{id:2,online:true,flow:0,total:45,ultrasonic:70,tank_level:30,m1:30,m2:35,temp:26,hum:55,rssi:-75,valve:"close",pump:"off"},{id:3,online:true,flow:1.1,total:200,ultrasonic:95,tank_level:5,m1:20,m2:22,temp:28,hum:50,rssi:-80,valve:"close",pump:"off"},{id:4,online:true,flow:2.2,total:80,ultrasonic:10,tank_level:90,m1:70,m2:75,temp:23,hum:65,rssi:-55,valve:"open",pump:"on"}]}); } },1500);
 </script>
 </body>
 </html>
