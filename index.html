@@ -22,7 +22,7 @@
     </div>
     <div class="flex items-center gap-4">
       <div class="text-[11px] bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-700">
-        Connected Nodes: <span id="nodeCount" class="font-bold text-cyan-400">0</span>
+        Active Online Nodes: <span id="nodeCount" class="font-bold text-cyan-400">0</span>
       </div>
       <div class="flex items-center gap-1.5 bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-700">
         <span id="statusDot" class="w-2 h-2 rounded-full bg-yellow-500"></span>
@@ -33,7 +33,7 @@
 
   <!-- Dashboard Grid -->
   <div id="customerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-    <div class="col-span-full bg-slate-800 rounded-xl p-8 text-center"><p class="text-slate-400">Waiting for nodes...</p></div>
+    <div class="col-span-full bg-slate-800 rounded-xl p-8 text-center"><p class="text-slate-400">Waiting for online nodes...</p></div>
   </div>
 </div>
 
@@ -78,11 +78,18 @@ function processLiveData(data){
 function isOnline(n){ return n.online===true||n.online===1||n.online==="true"||n.online==="1"; }
 
 function renderDashboard(){
-  const ids=Object.keys(nodes);
-  document.getElementById("nodeCount").textContent=ids.length;
+  // Filter and display only nodes that are explicitly online
+  const onlineIds=Object.keys(nodes).filter(id=>isOnline(nodes[id]));
+  
+  document.getElementById("nodeCount").textContent=onlineIds.length;
   const grid=document.getElementById("customerGrid");
-  if(ids.length===0){ grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-8 text-center text-slate-400">Waiting for nodes...</div>`; return; }
-  grid.innerHTML=ids.map(id=>createNodeCard(nodes[id])).join("");
+  
+  if(onlineIds.length===0){ 
+    grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-8 text-center text-slate-400">Waiting for online nodes...</div>`; 
+    return; 
+  }
+  
+  grid.innerHTML=onlineIds.map(id=>createNodeCard(nodes[id])).join("");
 }
 
 function createNodeCard(node){
@@ -231,7 +238,7 @@ setTimeout(()=>{
   if(Object.keys(nodes).length===0){ 
     processLiveData({nodes:[
       {id:1,online:true,flow:5.2,total:120,ultrasonic:20,tank_level:80,m1:60,m2:65,temp:24,hum:60,rssi:-60,valve:"open",pump:"on"},
-      {id:2,online:true,flow:0,total:45,ultrasonic:70,tank_level:30,m1:30,m2:35,temp:26,hum:55,rssi:-75,valve:"close",pump:"off"},
+      {id:2,online:false,flow:0,total:45,ultrasonic:70,tank_level:30,m1:30,m2:35,temp:26,hum:55,rssi:-75,valve:"close",pump:"off"},
       {id:3,online:true,flow:1.1,total:200,ultrasonic:95,tank_level:5,m1:20,m2:22,temp:28,hum:50,rssi:-80,valve:"close",pump:"off"}
     ]}); 
   } 
