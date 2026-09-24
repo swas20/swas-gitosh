@@ -3,26 +3,44 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AquaSense - Fixed Tank</title>
+<title>AquaSense - Fixed Tank Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-.water-fill{transition:height 1s ease-in-out; position:absolute; bottom:0; left:0; right:0;}
-.tank-wave{position:absolute; top:-4px; left:0; width:200%; height:8px; background:rgba(255,255,255,0.3); border-radius:50%; animation:wave 2s linear infinite}
-@keyframes wave{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+  .water-fill {
+    transition: height 1s ease-in-out;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+  .tank-wave {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    width: 200%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    animation: wave 2s linear infinite;
+  }
+  @keyframes wave {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
 </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen text-xs">
+<body class="bg-slate-900 text-white min-h-screen text-xs select-none">
 <div class="max-w-7xl mx-auto px-2 py-2">
-  <!-- Header -->
-  <header class="bg-slate-800 rounded-xl p-3 mb-3 flex justify-between items-center shadow-lg border border-slate-700">
+  <!-- Header Navbar -->
+  <header class="bg-slate-800 rounded-xl p-3 mb-3 flex flex-wrap justify-between items-center shadow-lg border border-slate-700 gap-2">
     <div class="flex items-center gap-3">
       <h1 class="text-xl font-black tracking-wider text-cyan-400">AQUASENSE</h1>
       <span class="text-[10px] text-slate-400 border-l border-slate-700 pl-3">IRRIGATION MASTER + ULTRASONIC TANK</span>
     </div>
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-3">
       <div class="text-[11px] bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-700">
-        Active Online Nodes: <span id="nodeCount" class="font-bold text-cyan-400">0</span>
+        Active Nodes: <span id="nodeCount" class="font-bold text-cyan-400">0</span>
       </div>
       <div class="flex items-center gap-1.5 bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-700">
         <span id="statusDot" class="w-2 h-2 rounded-full bg-yellow-500"></span>
@@ -31,112 +49,167 @@
     </div>
   </header>
 
-  <!-- Dashboard Grid -->
+  <!-- Node Grid -->
   <div id="customerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-    <div class="col-span-full bg-slate-800 rounded-xl p-8 text-center"><p class="text-slate-400">Waiting for online nodes...</p></div>
+    <div class="col-span-full bg-slate-800 rounded-xl p-8 text-center border border-slate-700/50">
+      <p class="text-slate-400 animate-pulse">Waiting for online nodes...</p>
+    </div>
   </div>
 </div>
 
 <script>
-const MQTT_BROKER="wss://broker.hivemq.com:8884/mqtt";
-const MQTT_LIVE_TOPIC="aquasense/moses_kaaga_9x7p2/live";
-const MQTT_CMD_TOPIC="aquasense/moses_kaaga_9x7p2/cmd";
-const TANK_HEIGHT_CM=100;
-let mqttClient=null; const nodes={};
+const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+const MQTT_LIVE_TOPIC = "aquasense/moses_kaaga_9x7p2/live";
+const MQTT_CMD_TOPIC = "aquasense/moses_kaaga_9x7p2/cmd";
+const TANK_HEIGHT_CM = 100;
 
-function connectMQTT(){
-  updateStatus(false,"Connecting...");
-  mqttClient=mqtt.connect(MQTT_BROKER,{reconnectPeriod:3000,connectTimeout:10000,clean:true});
-  mqttClient.on("connect",()=>{updateStatus(true,"MQTT Connected"); mqttClient.subscribe(MQTT_LIVE_TOPIC);});
-  mqttClient.on("message",(t,m)=>{ if(t!==MQTT_LIVE_TOPIC) return; try{processLiveData(JSON.parse(m.toString()))}catch(e){} });
-  mqttClient.on("error",()=>updateStatus(false,"MQTT Error"));
-  mqttClient.on("offline",()=>updateStatus(false,"Offline"));
-  mqttClient.on("reconnect",()=>updateStatus(false,"Reconnecting..."));
+let mqttClient = null;
+const nodes = {};
+
+function connectMQTT() {
+  updateStatus(false, "Connecting...");
+  mqttClient = mqtt.connect(MQTT_BROKER, {
+    reconnectPeriod: 3000,
+    connectTimeout: 10000,
+    clean: true
+  });
+
+  mqttClient.on("connect", () => {
+    updateStatus(true, "MQTT Connected");
+    mqttClient.subscribe(MQTT_LIVE_TOPIC);
+  });
+
+  mqttClient.on("message", (topic, message) => {
+    if (topic !== MQTT_LIVE_TOPIC) return;
+    try {
+      processLiveData(JSON.parse(message.toString()));
+    } catch (e) {
+      console.error("MQTT JSON Parse Error:", e);
+    }
+  });
+
+  mqttClient.on("error", () => updateStatus(false, "MQTT Error"));
+  mqttClient.on("offline", () => updateStatus(false, "Offline"));
+  mqttClient.on("reconnect", () => updateStatus(false, "Reconnecting..."));
 }
 
-function updateStatus(c,t){
-  document.getElementById("statusText").textContent=t;
-  document.getElementById("statusDot").className=c?"w-2 h-2 rounded-full bg-green-500":"w-2 h-2 rounded-full bg-yellow-500";
+function updateStatus(connected, text) {
+  document.getElementById("statusText").textContent = text;
+  document.getElementById("statusDot").className = connected
+    ? "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"
+    : "w-2 h-2 rounded-full bg-yellow-500";
 }
 
-function getTankMetrics(node){
-  const d=node.ultrasonic??node.ultra??node.distance??node.dist_cm??null;
-  const l=node.tank??node.tank_level??node.level??node.water_level??node.tank_percent??null;
-  let dist=0, pct=0;
-  if(l!==null&&!isNaN(l)){ pct=Number(l); dist=(d!==null?Number(d):(TANK_HEIGHT_CM-(pct/100)*TANK_HEIGHT_CM)); }
-  else if(d!==null&&!isNaN(d)){ dist=Number(d); pct=100-(dist/TANK_HEIGHT_CM*100); }
-  pct=Math.max(0,Math.min(100,pct));
-  return {distanceCm:dist.toFixed(1), levelPct:pct.toFixed(1), levelNum:pct};
+function getTankMetrics(node) {
+  const d = node.ultrasonic ?? node.ultra ?? node.distance ?? node.dist_cm ?? null;
+  const l = node.tank ?? node.tank_level ?? node.level ?? node.water_level ?? node.tank_percent ?? null;
+  
+  let dist = 0, pct = 0;
+  if (l !== null && !isNaN(l)) {
+    pct = Number(l);
+    dist = (d !== null ? Number(d) : (TANK_HEIGHT_CM - (pct / 100) * TANK_HEIGHT_CM));
+  } else if (d !== null && !isNaN(d)) {
+    dist = Number(d);
+    pct = 100 - (dist / TANK_HEIGHT_CM * 100);
+  }
+  
+  pct = Math.max(0, Math.min(100, pct));
+  return { distanceCm: dist.toFixed(1), levelPct: pct.toFixed(1), levelNum: pct };
 }
 
-function processLiveData(data){
-  if(!data||!Array.isArray(data.nodes)) return;
-  data.nodes.forEach(n=>{ if(n.id!=null) nodes[n.id]={...nodes[n.id], ...n}; });
+function processLiveData(data) {
+  if (!data || !Array.isArray(data.nodes)) return;
+  data.nodes.forEach(n => {
+    if (n.id != null) {
+      nodes[n.id] = { ...nodes[n.id], ...n };
+    }
+  });
   renderDashboard();
 }
 
-function isOnline(n){ return n.online===true||n.online===1||n.online==="true"||n.online==="1"; }
-
-function renderDashboard(){
-  const onlineIds=Object.keys(nodes).filter(id=>isOnline(nodes[id]));
-  
-  document.getElementById("nodeCount").textContent=onlineIds.length;
-  const grid=document.getElementById("customerGrid");
-  
-  if(onlineIds.length===0){ 
-    grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-8 text-center text-slate-400">Waiting for online nodes...</div>`; 
-    return; 
-  }
-  
-  grid.innerHTML=onlineIds.map(id=>createNodeCard(nodes[id])).join("");
+function isOnline(n) {
+  return n.online === true || n.online === 1 || n.online === "true" || n.online === "1";
 }
 
-function createNodeCard(node){
-  const id=node.id;
-  const online=isOnline(node);
-  const flow=Number(node.flow||0).toFixed(2);
-  const total=Number(node.total||0).toFixed(2);
-  const m1=Number(node.m1||node.moist1||0).toFixed(0);
-  const m2=Number(node.m2||node.moist2||0).toFixed(0);
-  const temp=Number(node.temp||0).toFixed(1);
-  const hum=Number(node.hum||0).toFixed(1);
-  const rssi=node.rssi||0;
+function renderDashboard() {
+  const onlineIds = Object.keys(nodes).filter(id => isOnline(nodes[id]));
+  document.getElementById("nodeCount").textContent = onlineIds.length;
+  const grid = document.getElementById("customerGrid");
   
-  // Standardize state checking
+  if (onlineIds.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full bg-slate-800 rounded-xl p-8 text-center border border-slate-700/50">
+        <p class="text-slate-400">Waiting for online nodes...</p>
+      </div>`;
+    return;
+  }
+  
+  grid.innerHTML = onlineIds.map(id => createNodeCard(nodes[id])).join("");
+}
+
+function createNodeCard(node) {
+  const id = node.id;
+  const online = isOnline(node);
+  const flow = Number(node.flow || 0).toFixed(2);
+  const total = Number(node.total || 0).toFixed(2);
+  const m1 = Number(node.m1 || node.moist1 || 0).toFixed(0);
+  const m2 = Number(node.m2 || node.moist2 || 0).toFixed(0);
+  const temp = Number(node.temp || 0).toFixed(1);
+  const hum = Number(node.hum || 0).toFixed(1);
+  const rssi = node.rssi || 0;
+  
   const valveVal = String(node.valve || "close").toLowerCase().trim();
   const pumpVal = String(node.pump || "off").toLowerCase().trim();
   
   const isValveOpen = ["open", "1", "true", "on"].includes(valveVal);
   const isPumpOn = ["on", "1", "true", "open"].includes(pumpVal);
 
-  const {distanceCm,levelPct,levelNum}=getTankMetrics(node);
+  const { distanceCm, levelPct, levelNum } = getTankMetrics(node);
 
   let waterColor, badge, status;
-  if(levelNum<10){ waterColor="linear-gradient(to top,#ef4444,#dc2626)"; badge="bg-red-500/20 text-red-400 border-red-500"; status="CRITICAL"; }
-  else if(levelNum<30){ waterColor="linear-gradient(to top,#f59e0b,#f97316)"; badge="bg-amber-500/20 text-amber-400 border-amber-500"; status="LOW"; }
-  else if(levelNum<70){ waterColor="linear-gradient(to top,#22d3ee,#3b82f6)"; badge="bg-cyan-500/20 text-cyan-400 border-cyan-500"; status="NORMAL"; }
-  else { waterColor="linear-gradient(to top,#60a5fa,#2563eb)"; badge="bg-blue-500/20 text-blue-300 border-blue-500"; status="FULL"; }
+  if (levelNum < 10) {
+    waterColor = "linear-gradient(to top, #ef4444, #dc2626)";
+    badge = "bg-red-500/20 text-red-400 border-red-500";
+    status = "CRITICAL";
+  } else if (levelNum < 30) {
+    waterColor = "linear-gradient(to top, #f59e0b, #f97316)";
+    badge = "bg-amber-500/20 text-amber-400 border-amber-500";
+    status = "LOW";
+  } else if (levelNum < 70) {
+    waterColor = "linear-gradient(to top, #22d3ee, #3b82f6)";
+    badge = "bg-cyan-500/20 text-cyan-400 border-cyan-500";
+    status = "NORMAL";
+  } else {
+    waterColor = "linear-gradient(to top, #60a5fa, #2563eb)";
+    badge = "bg-blue-500/20 text-blue-300 border-blue-500";
+    status = "FULL";
+  }
 
-  // Valve & Pump Dynamic Indicators
+  // Dynamic Badges (Green = Open/On, Red = Closed/Off)
   const valveBadgeClass = isValveOpen 
     ? "bg-green-500/20 text-green-400 border-green-500/40" 
     : "bg-red-500/20 text-red-400 border-red-500/40";
-  const valveDotClass = isValveOpen ? "bg-green-500" : "bg-red-500";
+  const valveDotClass = isValveOpen ? "bg-green-500 shadow-[0_0_6px_#22c55e]" : "bg-red-500 shadow-[0_0_6px_#ef4444]";
 
   const pumpBadgeClass = isPumpOn 
     ? "bg-green-500/20 text-green-400 border-green-500/40" 
     : "bg-red-500/20 text-red-400 border-red-500/40";
-  const pumpDotClass = isPumpOn ? "bg-green-500" : "bg-red-500";
+  const pumpDotClass = isPumpOn ? "bg-green-500 shadow-[0_0_6px_#22c55e]" : "bg-red-500 shadow-[0_0_6px_#ef4444]";
 
   return `
   <div class="bg-slate-800 border border-slate-700/80 rounded-xl p-3 shadow-lg flex flex-col justify-between">
     <!-- Node Header -->
     <div class="flex justify-between items-center border-b border-slate-700/60 pb-2 mb-2">
-      <div><h2 class="text-sm font-bold leading-none">Customer ${id}</h2><p class="text-[10px] text-slate-400 mt-0.5">ID: ${id}</p></div>
-      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${online?'bg-green-500/20 text-green-400':'bg-red-500/20 text-red-400'}">${online?'ONLINE':'OFFLINE'}</span>
+      <div>
+        <h2 class="text-sm font-bold leading-none">Customer ${id}</h2>
+        <p class="text-[10px] text-slate-400 mt-0.5">Node ID: #${id}</p>
+      </div>
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${online ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}">
+        ${online ? 'ONLINE' : 'OFFLINE'}
+      </span>
     </div>
 
-    <!-- Flow & Total Summary Strip -->
+    <!-- Flow & Total Water Usage -->
     <div class="grid grid-cols-2 gap-2 mb-2">
       <div class="bg-slate-900/80 rounded-lg p-2 text-center border border-slate-700/40">
         <p class="text-[9px] text-slate-400 font-medium">FLOW RATE</p>
@@ -148,21 +221,18 @@ function createNodeCard(node){
       </div>
     </div>
 
-    <!-- Compact Tank View -->
+    <!-- Ultrasonic Water Tank -->
     <div class="bg-slate-900/80 rounded-lg p-2.5 mb-2 border border-slate-700/50">
       <div class="flex justify-between items-center mb-2">
         <span class="text-[10px] font-bold text-slate-300">ULTRASONIC TANK</span>
         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border ${badge}">${status} ${levelPct}%</span>
       </div>
       <div class="flex gap-3 items-center">
-        <!-- Visual Tank -->
-        <div style="width:55px; height:75px; background:#1e293b; border:2px solid #475569; border-radius:6px; position:relative; overflow:hidden;" class="shrink-0">
+        <div style="width:55px; height:75px; background:#1e293b; border:2px solid #475569; border-radius:6px; position:relative; overflow:hidden;" class="shrink-0 shadow-inner">
           <div class="water-fill" style="height:${levelPct}%; background:${waterColor};">
             <div class="tank-wave"></div>
           </div>
         </div>
-
-        <!-- Metric Details -->
         <div class="flex-1 space-y-1">
           <div class="flex justify-between items-center bg-slate-800/80 rounded px-2 py-1">
             <span class="text-[10px] text-slate-400">Distance</span>
@@ -172,25 +242,36 @@ function createNodeCard(node){
             <span class="text-[10px] text-slate-400">Level</span>
             <span class="text-xs font-bold text-white">${levelPct} %</span>
           </div>
-          <!-- Compact Level Bar -->
-          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-            <div class="h-full" style="width:${levelPct}%; background:${waterColor};"></div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1 border border-slate-700/30">
+            <div class="h-full transition-all duration-500" style="width:${levelPct}%; background:${waterColor};"></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Sensor Reading Grid -->
+    <!-- Moisture & Climate Sensors -->
     <div class="grid grid-cols-4 gap-1.5 mb-2">
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800"><p class="text-[9px] text-slate-400">M1</p><p class="text-green-400 font-bold text-xs">${m1}%</p></div>
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800"><p class="text-[9px] text-slate-400">M2</p><p class="text-green-400 font-bold text-xs">${m2}%</p></div>
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800"><p class="text-[9px] text-slate-400">Temp</p><p class="text-amber-400 font-bold text-xs">${temp}°C</p></div>
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800"><p class="text-[9px] text-slate-400">Hum</p><p class="text-cyan-400 font-bold text-xs">${hum}%</p></div>
+      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
+        <p class="text-[9px] text-slate-400">Moist1</p>
+        <p class="text-green-400 font-bold text-xs">${m1}%</p>
+      </div>
+      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
+        <p class="text-[9px] text-slate-400">Moist2</p>
+        <p class="text-green-400 font-bold text-xs">${m2}%</p>
+      </div>
+      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
+        <p class="text-[9px] text-slate-400">Temp</p>
+        <p class="text-amber-400 font-bold text-xs">${temp}°C</p>
+      </div>
+      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
+        <p class="text-[9px] text-slate-400">Hum</p>
+        <p class="text-cyan-400 font-bold text-xs">${hum}%</p>
+      </div>
     </div>
 
-    <!-- Direct Controls with Dynamic Indicators -->
+    <!-- Interactive Actuator Controls -->
     <div class="space-y-1.5">
-      <!-- Valve Control Block -->
+      <!-- Valve Block -->
       <div class="bg-slate-900/60 rounded-lg p-1.5 flex justify-between items-center border border-slate-800">
         <div class="flex items-center gap-1.5 ml-1">
           <span class="text-[11px] font-medium text-slate-300">Valve:</span>
@@ -200,12 +281,12 @@ function createNodeCard(node){
           </span>
         </div>
         <div class="flex gap-1">
-          <button onclick="sendCommand(${id},'open')" class="bg-green-600 hover:bg-green-500 px-2.5 py-0.5 rounded font-bold text-[10px] transition">OPEN</button>
-          <button onclick="sendCommand(${id},'close')" class="bg-red-600 hover:bg-red-500 px-2.5 py-0.5 rounded font-bold text-[10px] transition">CLOSE</button>
+          <button onclick="sendCommand(${id},'open')" class="bg-green-600 hover:bg-green-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">OPEN</button>
+          <button onclick="sendCommand(${id},'close')" class="bg-red-600 hover:bg-red-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">CLOSE</button>
         </div>
       </div>
 
-      <!-- Pump Control Block -->
+      <!-- Pump Block -->
       <div class="bg-slate-900/60 rounded-lg p-1.5 flex justify-between items-center border border-slate-800">
         <div class="flex items-center gap-1.5 ml-1">
           <span class="text-[11px] font-medium text-slate-300">Pump:</span>
@@ -215,48 +296,50 @@ function createNodeCard(node){
           </span>
         </div>
         <div class="flex gap-1">
-          <button onclick="sendCommand(${id},'pump_on')" class="bg-green-600 hover:bg-green-500 px-2.5 py-0.5 rounded font-bold text-[10px] transition">ON</button>
-          <button onclick="sendCommand(${id},'pump_off')" class="bg-red-600 hover:bg-red-500 px-2.5 py-0.5 rounded font-bold text-[10px] transition">OFF</button>
+          <button onclick="sendCommand(${id},'pump_on')" class="bg-green-600 hover:bg-green-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">ON</button>
+          <button onclick="sendCommand(${id},'pump_off')" class="bg-red-600 hover:bg-red-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">OFF</button>
         </div>
       </div>
     </div>
 
-    <!-- Footer Meta Info -->
+    <!-- Signal Stats Footer -->
     <div class="text-center text-[9px] text-slate-500 mt-2">
       RSSI ${rssi} dBm | Sensor Node #${id}
     </div>
   </div>`;
 }
 
-function sendCommand(id,cmd){
-  // Immediately update local node state so indicator changes without waiting for server response
-  if(nodes[id]){
-    if(cmd === "open") nodes[id].valve = "open";
-    if(cmd === "close") nodes[id].valve = "close";
-    if(cmd === "pump_on") nodes[id].pump = "on";
-    if(cmd === "pump_off") nodes[id].pump = "off";
+function sendCommand(id, cmd) {
+  if (nodes[id]) {
+    if (cmd === "open") nodes[id].valve = "open";
+    if (cmd === "close") nodes[id].valve = "close";
+    if (cmd === "pump_on") nodes[id].pump = "on";
+    if (cmd === "pump_off") nodes[id].pump = "off";
     renderDashboard();
   }
 
-  if(!mqttClient||!mqttClient.connected){
-    console.warn("MQTT offline - Command updated locally only");
+  if (!mqttClient || !mqttClient.connected) {
+    console.warn("MQTT disconnected - state updated locally");
     return;
   }
-  mqttClient.publish(MQTT_CMD_TOPIC,JSON.stringify({id:Number(id),cmd:cmd}));
+  
+  mqttClient.publish(MQTT_CMD_TOPIC, JSON.stringify({ id: Number(id), cmd: cmd }));
 }
 
 connectMQTT();
 
-// Demo fallback data if no live data received within 2 seconds
-setTimeout(()=>{ 
-  if(Object.keys(nodes).length===0){ 
-    processLiveData({nodes:[
-      {id:1,online:true,flow:5.2,total:120,ultrasonic:20,tank_level:80,m1:60,m2:65,temp:24,hum:60,rssi:-60,valve:"open",pump:"on"},
-      {id:2,online:false,flow:0,total:45,ultrasonic:70,tank_level:30,m1:30,m2:35,temp:26,hum:55,rssi:-75,valve:"close",pump:"off"},
-      {id:3,online:true,flow:1.1,total:200,ultrasonic:95,tank_level:5,m1:20,m2:22,temp:28,hum:50,rssi:-80,valve:"close",pump:"off"}
-    ]}); 
-  } 
-},2000);
+// Fallback demo data if no MQTT transmission received within 2s
+setTimeout(() => {
+  if (Object.keys(nodes).length === 0) {
+    processLiveData({
+      nodes: [
+        { id: 1, online: true, flow: 5.2, total: 120, ultrasonic: 20, tank_level: 80, m1: 60, m2: 65, temp: 24, hum: 60, rssi: -60, valve: "open", pump: "on" },
+        { id: 2, online: false, flow: 0, total: 45, ultrasonic: 70, tank_level: 30, m1: 30, m2: 35, temp: 26, hum: 55, rssi: -75, valve: "close", pump: "off" },
+        { id: 3, online: true, flow: 1.1, total: 200, ultrasonic: 95, tank_level: 5, m1: 20, m2: 22, temp: 28, hum: 50, rssi: -80, valve: "close", pump: "off" }
+      ]
+    });
+  }
+}, 2000);
 </script>
 </body>
 </html>
