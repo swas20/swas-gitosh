@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AquaSense - Fixed Indicator</title>
+<title>AquaSense - Green Open Red Closed</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
@@ -13,7 +13,6 @@ body{display:flex; flex-direction:column}
 #customerGrid::-webkit-scrollbar{width:6px}
 #customerGrid::-webkit-scrollbar-thumb{background:#334155; border-radius:10px}
 .water-fill{transition:height 0.8s ease; position:absolute; bottom:0; left:0; right:0}
-.status-dot{width:10px; height:10px; border-radius:50%; display:inline-block; transition:all 0.3s}
 </style>
 </head>
 <body class="bg-slate-900 text-white h-screen">
@@ -29,7 +28,7 @@ body{display:flex; flex-direction:column}
 </header>
 
 <div id="customerGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 content-start flex-1">
-<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center text-slate-400">Waiting for customer nodes...</div>
+<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center text-slate-400">Waiting...</div>
 </div>
 </div>
 
@@ -42,47 +41,24 @@ let mqttClient=null; const nodes={};
 
 function connectMQTT(){
   mqttClient=mqtt.connect(MQTT_BROKER,{reconnectPeriod:3000,connectTimeout:10000,clean:true});
-  mqttClient.on("connect",()=>{
-    document.getElementById("statusText").textContent="MQTT Connected";
-    document.getElementById("statusDot").className="w-2 h-2 rounded-full bg-green-500";
-    mqttClient.subscribe(MQTT_LIVE_TOPIC);
-  });
-  mqttClient.on("message",(t,m)=>{
-    if(t!==MQTT_LIVE_TOPIC) return;
-    try{processLiveData(JSON.parse(m.toString()))}catch(e){console.error(e)}
-  });
+  mqttClient.on("connect",()=>{document.getElementById("statusText").textContent="MQTT Connected"; document.getElementById("statusDot").className="w-2 h-2 rounded-full bg-green-500"; mqttClient.subscribe(MQTT_LIVE_TOPIC);});
+  mqttClient.on("message",(t,m)=>{ if(t!==MQTT_LIVE_TOPIC) return; try{processLiveData(JSON.parse(m.toString()))}catch(e){}});
 }
-
 function getTankMetrics(node){
   const d=node.ultrasonic??node.ultra??node.distance??node.dist_cm??null;
   const l=node.tank??node.tank_level??node.level??node.water_level??node.tank_percent??null;
   let dist=0,pct=0;
   if(l!==null&&!isNaN(l)){pct=Number(l); dist=d!==null?Number(d):(TANK_HEIGHT_CM-(pct/100)*TANK_HEIGHT_CM);}
   else if(d!==null){dist=Number(d); pct=100-(dist/TANK_HEIGHT_CM*100);}
-  pct=Math.max(0,Math.min(100,pct));
-  return {distanceCm:dist.toFixed(0), levelPct:pct.toFixed(0), levelNum:pct};
+  pct=Math.max(0,Math.min(100,pct)); return {distanceCm:dist.toFixed(0), levelPct:pct.toFixed(0), levelNum:pct};
 }
-
-function processLiveData(data){
-  if(!data||!Array.isArray(data.nodes)) return;
-  data.nodes.forEach(n=>{ if(n.id!=null) nodes[n.id]={...n, lastUpdate:Date.now()} });
-  renderDashboard();
-}
-
-function isOnline(n){
-  // if online field missing, treat as online for test
-  if(n.online===undefined) return true;
-  return n.online===true||n.online===1||n.online==="true"||n.online==="1";
-}
-
+function processLiveData(data){ if(!data||!Array.isArray(data.nodes)) return; data.nodes.forEach(n=>{if(n.id!=null) nodes[n.id]={...n}}); renderDashboard(); }
+function isOnline(n){ return n.online===true||n.online===1||n.online==="true"||n.online==="1"; }
 function renderDashboard(){
   document.getElementById("nodeCount").textContent=Object.keys(nodes).length;
   const grid=document.getElementById("customerGrid");
   const ids=Object.keys(nodes);
-  if(ids.length===0){
-    grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center">Waiting...</div>`;
-    return;
-  }
+  if(ids.length===0){ grid.innerHTML=`<div class="col-span-full bg-slate-800 rounded-xl p-10 text-center">Waiting...</div>`; return; }
   grid.innerHTML=ids.map(id=>createNodeCard(nodes[id])).join("");
 }
 
@@ -91,68 +67,54 @@ function createNodeCard(node){
   const online=isOnline(node);
   const flow=Number(node.flow||0).toFixed(1);
   const total=Number(node.total||0).toFixed(0);
-  const m1=Number(node.m1||node.moist1||0).toFixed(0);
-  const m2=Number(node.m2||node.moist2||0).toFixed(0);
+  const m1=Number(node.m1||0).toFixed(0);
+  const m2=Number(node.m2||0).toFixed(0);
+  const valve=String(node.valve||"close").toLowerCase();
+  const pump=String(node.pump||"off").toLowerCase();
   const {distanceCm,levelPct,levelNum}=getTankMetrics(node);
-
-  // ROBUST PARSE - handles open/close, 1/0, true/false, on/off
-  let rawValve = node.valve;
-  let rawPump = node.pump;
-  let v = String(rawValve||"close").toLowerCase().trim();
-  let p = String(rawPump||"off").toLowerCase().trim();
-  let valveIsOpen = (v==="open" || v==="1" || v==="true" || v==="on");
-  let pumpIsOn = (p==="on" || p==="1" || p==="true" || p==="open" || p==="running");
-
-  // Colors for indicator
-  let valveColor = valveIsOpen? "#22c55e" : "#ef4444"; // green when open, red when closed
-  let valveBg = valveIsOpen? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)";
-  let valveBorder = valveIsOpen? "#22c55e" : "#ef4444";
-
-  let pumpColor = pumpIsOn? "#22c55e" : "#ef4444"; // green when on, red when off
-  let pumpBg = pumpIsOn? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)";
-  let pumpBorder = pumpIsOn? "#22c55e" : "#ef4444";
 
   let waterColor="linear-gradient(to top,#22d3ee,#3b82f6)";
   if(levelNum<10) waterColor="linear-gradient(to top,#ef4444,#dc2626)";
   else if(levelNum<30) waterColor="linear-gradient(to top,#f59e0b,#f97316)";
+  else if(levelNum<70) waterColor="linear-gradient(to top,#22d3ee,#3b82f6)";
+  else waterColor="linear-gradient(to top,#60a5fa,#2563eb)";
 
-  // INDICATORS - ONLY FOR ONLINE NODES
-  let indicators = "";
-  if(online){
-    indicators = `
-      <div style="background:${valveBg}; border:2px solid ${valveBorder}; border-radius:8px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center; transition:all 0.4s;">
-        <div style="display:flex; align-items:center; gap:6px;">
-          <div class="status-dot" style="background:${valveColor}; box-shadow:0 0 8px ${valveColor};"></div>
-          <span style="font-size:10px; font-weight:bold; color:${valveColor};">VALVE</span>
-        </div>
-        <span style="font-size:10px; font-weight:900; color:${valveColor};">${valveIsOpen?'OPEN':'CLOSED'}</span>
-      </div>
-      <div style="background:${pumpBg}; border:2px solid ${pumpBorder}; border-radius:8px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center; transition:all 0.4s;">
-        <div style="display:flex; align-items:center; gap:6px;">
-          <div class="status-dot" style="background:${pumpColor}; box-shadow:0 0 8px ${pumpColor};"></div>
-          <span style="font-size:10px; font-weight:bold; color:${pumpColor};">PUMP</span>
-        </div>
-        <span style="font-size:10px; font-weight:900; color:${pumpColor};">${pumpIsOn?'ON':'OFF'}</span>
-      </div>
-    `;
-  }
+  // --- GREEN WHEN OPEN, RED WHEN CLOSED ---
+  const valveIsOpen = valve==='open';
+  const pumpIsOn = pump==='on';
 
-  let controls = online? `
+  const valveIndicator = online? `
+    <div style="background:${valveIsOpen?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)'}; border:2px solid ${valveIsOpen?'#22c55e':'#ef4444'}; border-radius:8px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <div style="width:10px; height:10px; border-radius:50%; background:${valveIsOpen?'#22c55e':'#ef4444'}; box-shadow:0 0 8px ${valveIsOpen?'#22c55e':'#ef4444'};"></div>
+        <span style="font-size:10px; font-weight:bold; color:${valveIsOpen?'#4ade80':'#f87171'};">VALVE</span>
+      </div>
+      <span style="font-size:10px; font-weight:900; color:${valveIsOpen?'#22c55e':'#ef4444'}; letter-spacing:0.5px;">${valveIsOpen?'OPEN':'CLOSED'}</span>
+    </div>` : '';
+
+  const pumpIndicator = online? `
+    <div style="background:${pumpIsOn?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)'}; border:2px solid ${pumpIsOn?'#22c55e':'#ef4444'}; border-radius:8px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <div style="width:10px; height:10px; border-radius:50%; background:${pumpIsOn?'#22c55e':'#ef4444'}; box-shadow:0 0 8px ${pumpIsOn?'#22c55e':'#ef4444'};"></div>
+        <span style="font-size:10px; font-weight:bold; color:${pumpIsOn?'#4ade80':'#f87171'};">PUMP</span>
+      </div>
+      <span style="font-size:10px; font-weight:900; color:${pumpIsOn?'#22c55e':'#ef4444'};">${pumpIsOn?'ON':'OFF'}</span>
+    </div>` : '';
+
+  const controls = online? `
     <div class="grid grid-cols-2 gap-1 mt-auto">
       <div class="flex gap-1">
-        <button onclick="sendCommand(${id},'open')" class="flex-1 py-1.5 rounded text- font-bold" style="background:${valveIsOpen?'#22c55e':'#334155'}; color:${valveIsOpen?'black':'white'}; border:${valveIsOpen?'2px solid #86efac':'1px solid #475569'}">OPEN</button>
-        <button onclick="sendCommand(${id},'close')" class="flex-1 py-1.5 rounded text- font-bold" style="background:${!valveIsOpen?'#ef4444':'#334155'}; color:white; border:${!valveIsOpen?'2px solid #fca5a5':'1px solid #475569'}">CLOSE</button>
+        <button onclick="sendCommand(${id},'open')" style="flex:1; background:${valveIsOpen?'#22c55e':'#334155'}; color:${valveIsOpen?'black':'white'}; font-size:9px; padding:6px 2px; border-radius:6px; font-weight:bold; border:${valveIsOpen?'2px solid #4ade80':'1px solid #475569'}">OPEN</button>
+        <button onclick="sendCommand(${id},'close')" style="flex:1; background:${!valveIsOpen?'#ef4444':'#334155'}; color:white; font-size:9px; padding:6px 2px; border-radius:6px; font-weight:bold; border:${!valveIsOpen?'2px solid #f87171':'1px solid #475569'}">CLOSE</button>
       </div>
       <div class="flex gap-1">
-        <button onclick="sendCommand(${id},'pump_on')" class="flex-1 py-1.5 rounded text- font-bold" style="background:${pumpIsOn?'#22c55e':'#334155'}; color:${pumpIsOn?'black':'white'}; border:${pumpIsOn?'2px solid #86efac':'1px solid #475569'}">P-ON</button>
-        <button onclick="sendCommand(${id},'pump_off')" class="flex-1 py-1.5 rounded text- font-bold" style="background:${!pumpIsOn?'#ef4444':'#334155'}; color:white; border:${!pumpIsOn?'2px solid #fca5a5':'1px solid #475569'}">OFF</button>
+        <button onclick="sendCommand(${id},'pump_on')" style="flex:1; background:${pumpIsOn?'#22c55e':'#334155'}; color:${pumpIsOn?'black':'white'}; font-size:9px; padding:6px 2px; border-radius:6px; font-weight:bold; border:${pumpIsOn?'2px solid #4ade80':'1px solid #475569'}">P-ON</button>
+        <button onclick="sendCommand(${id},'pump_off')" style="flex:1; background:${!pumpIsOn?'#ef4444':'#334155'}; color:white; font-size:9px; padding:6px 2px; border-radius:6px; font-weight:bold; border:${!pumpIsOn?'2px solid #f87171':'1px solid #475569'}">OFF</button>
       </div>
-    </div>
-  ` : `
+    </div>` : `
     <div class="mt-auto bg-red-900/20 border border-red-500/30 rounded-lg p-2 text-center">
       <p class="text- font-bold text-red-400">OFFLINE - Controls Hidden</p>
-    </div>
-  `;
+    </div>`;
 
   return `
   <div class="bg-slate-800 border ${online?'border-slate-700':'border-red-900/50 opacity-60'} rounded-xl p-3 flex flex-col h-">
@@ -165,7 +127,8 @@ function createNodeCard(node){
       <div class="space-y-1.5">
         <div class="bg-slate-900 rounded px-2 py-1 flex justify-between"><span class="text- text-slate-400">FLOW</span><span class="text-xs font-bold text-cyan-400">${flow} L/m</span></div>
         <div class="bg-slate-900 rounded px-2 py-1 flex justify-between"><span class="text- text-slate-400">TOTAL</span><span class="text-xs font-bold text-blue-400">${total} L</span></div>
-        ${indicators}
+        ${valveIndicator}
+        ${pumpIndicator}
       </div>
       <div style="width:70px; height:115px; background:#1e293b; border:2px solid #475569; border-radius:6px 6px 12px 12px; position:relative; overflow:hidden;">
         <div class="water-fill" style="height:${levelPct}%; background:${waterColor};"><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size:10px;">${levelNum>20?levelPct+'%':''}</div></div>
@@ -174,7 +137,7 @@ function createNodeCard(node){
     </div>
 
     <div class="bg-slate-900/50 rounded px-2 py-1 mb-2">
-      <div style="height:4px; background:#334155; border-radius:2px; overflow:hidden;"><div style="height:100%; width:${levelPct}%; background:${waterColor}; transition:all 0.5s"></div></div>
+      <div style="height:4px; background:#334155; border-radius:2px; overflow:hidden;"><div style="height:100%; width:${levelPct}%; background:${waterColor};"></div></div>
     </div>
 
     <div class="grid grid-cols-4 gap-1 mb-2">
@@ -187,25 +150,9 @@ function createNodeCard(node){
     ${controls}
   </div>`;
 }
-
-function sendCommand(id,cmd){
-  if(!mqttClient||!mqttClient.connected){alert("MQTT offline");return;}
-  mqttClient.publish(MQTT_CMD_TOPIC,JSON.stringify({id:Number(id),cmd:cmd}));
-}
-
+function sendCommand(id,cmd){ if(!mqttClient||!mqttClient.connected){alert("MQTT offline");return;} mqttClient.publish(MQTT_CMD_TOPIC,JSON.stringify({id:Number(id),cmd:cmd})); }
 connectMQTT();
-
-// Demo data - remove when live
-setTimeout(()=>{
-  if(Object.keys(nodes).length===0){
-    processLiveData({nodes:[
-      {id:1,online:true,flow:5.2,total:120,ultrasonic:20,tank_level:80,m1:60,m2:65,valve:"open",pump:"on"},
-      {id:2,online:true,flow:0,total:45,ultrasonic:70,tank_level:30,m1:30,m2:35,valve:"close",pump:"off"},
-      {id:3,online:false,flow:0,total:10,ultrasonic:90,tank_level:10,m1:20,m2:20,valve:"close",pump:"off"},
-      {id:4,online:true,flow:2.1,total:80,ultrasonic:50,tank_level:50,m1:70,m2:70,valve:"open",pump:"off"}
-    ]});
-  }
-},1200);
+setTimeout(()=>{ if(Object.keys(nodes).length===0){ processLiveData({nodes:[{id:1,online:true,flow:5.2,total:120,ultrasonic:20,tank_level:80,m1:60,m2:65,valve:"open",pump:"on",rssi:-60},{id:2,online:true,flow:0,total:45,ultrasonic:70,tank_level:30,m1:30,m2:35,valve:"close",pump:"off",rssi:-75},{id:3,online:false,flow:0,total:10,ultrasonic:90,tank_level:10,m1:20,m2:20,valve:"close",pump:"off"},{id:4,online:true,flow:2.1,total:80,ultrasonic:50,tank_level:50,m1:70,m2:70,valve:"open",pump:"off"}]}); } },1200);
 </script>
 </body>
 </html>
