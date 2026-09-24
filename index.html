@@ -1,354 +1,1195 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AquaSense - Fixed Tank Dashboard</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-<style>
-  .water-fill {
-    transition: height 1s ease-in-out;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-  }
-  .tank-wave {
-    position: absolute;
-    top: -4px;
-    left: 0;
-    width: 200%;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    animation: wave 2s linear infinite;
-  }
-  @keyframes wave {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
-</style>
-</head>
-<body class="bg-slate-900 text-white min-h-screen text-xs select-none">
-<div class="max-w-7xl mx-auto px-2 py-2">
-  <!-- Header Navbar -->
-  <header class="bg-slate-800 rounded-xl p-3 mb-3 flex flex-wrap justify-between items-center shadow-lg border border-slate-700 gap-2">
-    <div class="flex items-center gap-3">
-      <h1 class="text-xl font-black tracking-wider text-cyan-400">AQUASENSE</h1>
-      <span class="text-[10px] text-slate-400 border-l border-slate-700 pl-3">IRRIGATION MASTER + ULTRASONIC TANK</span>
-    </div>
-    <div class="flex items-center gap-3">
-      <div class="text-[11px] bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-700">
-        Active Nodes: <span id="nodeCount" class="font-bold text-cyan-400">0</span>
-      </div>
-      <div class="flex items-center gap-1.5 bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-700">
-        <span id="statusDot" class="w-2 h-2 rounded-full bg-yellow-500"></span>
-        <span id="statusText" class="text-[11px] text-slate-300">Connecting...</span>
-      </div>
-    </div>
-  </header>
 
-  <!-- Node Grid -->
-  <div id="customerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-    <div class="col-span-full bg-slate-800 rounded-xl p-8 text-center border border-slate-700/50">
-      <p class="text-slate-400 animate-pulse">Waiting for online nodes...</p>
-    </div>
-  </div>
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>AquaSense Irrigation Dashboard</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<style>
+
+body {
+  font-family: Arial, sans-serif;
+}
+
+.card {
+  transition: transform 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.green-dot {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.red-dot {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+.green-status {
+  background: rgba(34,197,94,0.15);
+  color: #4ade80;
+  border-color: rgba(34,197,94,0.5);
+}
+
+.red-status {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border-color: rgba(239,68,68,0.5);
+}
+
+.water-fill {
+  transition: height 1s ease;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.tank-wave {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 200%;
+  height: 8px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 50%;
+  animation: wave 2s linear infinite;
+}
+
+@keyframes wave {
+
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+
+}
+
+</style>
+
+</head>
+
+
+<body class="bg-slate-900 text-white min-h-screen">
+
+<div class="max-w-7xl mx-auto px-3 py-3">
+
+<!-- ========================================================= -->
+<!-- HEADER -->
+<!-- ========================================================= -->
+
+<header
+  class="bg-slate-800 rounded-xl p-4 mb-4
+         flex flex-wrap justify-between items-center
+         shadow-lg border border-slate-700"
+>
+
+<div>
+
+<h1 class="text-2xl font-black text-cyan-400">
+AQUASENSE
+</h1>
+
+<p class="text-xs text-slate-400">
+IRRIGATION MASTER + WATER MANAGEMENT
+</p>
+
 </div>
 
+
+<div class="flex items-center gap-3">
+
+<div
+  class="bg-slate-900 px-3 py-2
+         rounded-lg border border-slate-700"
+>
+
+Active Nodes:
+
+<span
+  id="nodeCount"
+  class="font-bold text-cyan-400"
+>
+0
+</span>
+
+</div>
+
+
+<div
+  class="flex items-center gap-2
+         bg-slate-900 px-3 py-2
+         rounded-lg border border-slate-700"
+>
+
+<span
+  id="statusDot"
+  class="dot bg-yellow-500"
+></span>
+
+<span
+  id="statusText"
+  class="text-xs text-slate-300"
+>
+Connecting...
+</span>
+
+</div>
+
+</div>
+
+</header>
+
+
+<!-- ========================================================= -->
+<!-- NODE GRID -->
+<!-- ========================================================= -->
+
+<div
+  id="customerGrid"
+  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+>
+
+<div
+  class="col-span-full bg-slate-800
+         rounded-xl p-10 text-center
+         border border-slate-700"
+>
+
+<p class="text-slate-400">
+Waiting for online nodes...
+</p>
+
+</div>
+
+</div>
+
+</div>
+
+
 <script>
-const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
-const MQTT_LIVE_TOPIC = "aquasense/moses_kaaga_9x7p2/live";
-const MQTT_CMD_TOPIC = "aquasense/moses_kaaga_9x7p2/cmd";
-const TANK_HEIGHT_CM = 100;
+
+// ============================================================
+// MQTT
+// ============================================================
+
+const MQTT_BROKER =
+  "wss://broker.hivemq.com:8884/mqtt";
+
+const MQTT_LIVE_TOPIC =
+  "aquasense/moses_kaaga_9x7p2/live";
+
+const MQTT_CMD_TOPIC =
+  "aquasense/moses_kaaga_9x7p2/cmd";
+
+
+// ============================================================
+// GLOBAL VARIABLES
+// ============================================================
 
 let mqttClient = null;
+
 const nodes = {};
 
+
+// ============================================================
+// MQTT CONNECTION
+// ============================================================
+
 function connectMQTT() {
-  updateStatus(false, "Connecting...");
-  mqttClient = mqtt.connect(MQTT_BROKER, {
-    reconnectPeriod: 3000,
-    connectTimeout: 10000,
-    clean: true
-  });
 
-  mqttClient.on("connect", () => {
-    updateStatus(true, "MQTT Connected");
-    mqttClient.subscribe(MQTT_LIVE_TOPIC);
-  });
+  updateConnectionStatus(
+    false,
+    "Connecting..."
+  );
 
-  mqttClient.on("message", (topic, message) => {
-    if (topic !== MQTT_LIVE_TOPIC) return;
-    try {
-      processLiveData(JSON.parse(message.toString()));
-    } catch (e) {
-      console.error("MQTT JSON Parse Error:", e);
+  mqttClient = mqtt.connect(
+    MQTT_BROKER,
+    {
+      reconnectPeriod: 3000,
+      connectTimeout: 10000,
+      clean: true
     }
-  });
+  );
 
-  mqttClient.on("error", () => updateStatus(false, "MQTT Error"));
-  mqttClient.on("offline", () => updateStatus(false, "Offline"));
-  mqttClient.on("reconnect", () => updateStatus(false, "Reconnecting..."));
+
+  // ----------------------------------------------------------
+  // CONNECTED
+  // ----------------------------------------------------------
+
+  mqttClient.on(
+    "connect",
+    () => {
+
+      console.log(
+        "MQTT connected"
+      );
+
+      updateConnectionStatus(
+        true,
+        "MQTT Connected"
+      );
+
+
+      mqttClient.subscribe(
+        MQTT_LIVE_TOPIC,
+        (error) => {
+
+          if (error) {
+
+            console.error(
+              "Subscribe error:",
+              error
+            );
+
+          }
+          else {
+
+            console.log(
+              "Subscribed:",
+              MQTT_LIVE_TOPIC
+            );
+          }
+        }
+      );
+
+    }
+  );
+
+
+  // ----------------------------------------------------------
+  // MESSAGE
+  // ----------------------------------------------------------
+
+  mqttClient.on(
+    "message",
+    (topic, message) => {
+
+      if (
+        topic !== MQTT_LIVE_TOPIC
+      ) {
+
+        return;
+      }
+
+
+      try {
+
+        const data =
+          JSON.parse(
+            message.toString()
+          );
+
+        processLiveData(data);
+
+      }
+
+      catch (error) {
+
+        console.error(
+          "JSON error:",
+          error
+        );
+
+      }
+
+    }
+  );
+
+
+  // ----------------------------------------------------------
+  // ERRORS
+  // ----------------------------------------------------------
+
+  mqttClient.on(
+    "error",
+    (error) => {
+
+      console.error(
+        "MQTT error:",
+        error
+      );
+
+      updateConnectionStatus(
+        false,
+        "MQTT Error"
+      );
+
+    }
+  );
+
+
+  mqttClient.on(
+    "offline",
+    () => {
+
+      updateConnectionStatus(
+        false,
+        "Offline"
+      );
+
+    }
+  );
+
+
+  mqttClient.on(
+    "reconnect",
+    () => {
+
+      updateConnectionStatus(
+        false,
+        "Reconnecting..."
+      );
+
+    }
+  );
+
 }
 
-function updateStatus(connected, text) {
-  document.getElementById("statusText").textContent = text;
-  document.getElementById("statusDot").className = connected
-    ? "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"
-    : "w-2 h-2 rounded-full bg-yellow-500";
-}
 
-function getTankMetrics(node) {
-  const d = node.ultrasonic ?? node.ultra ?? node.distance ?? node.dist_cm ?? null;
-  const l = node.tank ?? node.tank_level ?? node.level ?? node.water_level ?? node.tank_percent ?? null;
-  
-  let dist = 0, pct = 0;
-  if (l !== null && !isNaN(l)) {
-    pct = Number(l);
-    dist = (d !== null ? Number(d) : (TANK_HEIGHT_CM - (pct / 100) * TANK_HEIGHT_CM));
-  } else if (d !== null && !isNaN(d)) {
-    dist = Number(d);
-    pct = 100 - (dist / TANK_HEIGHT_CM * 100);
+// ============================================================
+// CONNECTION STATUS
+// ============================================================
+
+function updateConnectionStatus(
+  connected,
+  text
+) {
+
+  const dot =
+    document.getElementById(
+      "statusDot"
+    );
+
+  const statusText =
+    document.getElementById(
+      "statusText"
+    );
+
+
+  statusText.textContent =
+    text;
+
+
+  if (connected) {
+
+    dot.className =
+      "dot green-dot";
+
   }
-  
-  pct = Math.max(0, Math.min(100, pct));
-  return { distanceCm: dist.toFixed(1), levelPct: pct.toFixed(1), levelNum: pct };
+
+  else {
+
+    dot.className =
+      "dot bg-yellow-500";
+
+  }
+
 }
+
+
+// ============================================================
+// PROCESS LIVE DATA
+// ============================================================
 
 function processLiveData(data) {
-  if (!data || !Array.isArray(data.nodes)) return;
-  data.nodes.forEach(n => {
-    if (n.id != null) {
-      nodes[n.id] = { ...nodes[n.id], ...n };
+
+  if (
+    !data ||
+    !Array.isArray(data.nodes)
+  ) {
+
+    console.warn(
+      "Invalid live data",
+      data
+    );
+
+    return;
+  }
+
+
+  data.nodes.forEach(
+    (node) => {
+
+      if (node.id == null) {
+        return;
+      }
+
+
+      nodes[node.id] = {
+
+        ...nodes[node.id],
+
+        ...node
+
+      };
+
     }
-  });
+  );
+
+
   renderDashboard();
+
 }
 
-function isOnline(n) {
-  return n.online === true || n.online === 1 || n.online === "true" || n.online === "1";
+
+// ============================================================
+// ONLINE CHECK
+// ============================================================
+
+function isOnline(node) {
+
+  return (
+    node.online === true ||
+    node.online === 1 ||
+    node.online === "true" ||
+    node.online === "1"
+  );
+
 }
+
+
+// ============================================================
+// VALVE STATE
+// ============================================================
+
+function isValveOpen(node) {
+
+  const value =
+    String(
+      node.valve
+    )
+    .toLowerCase()
+    .trim();
+
+
+  return (
+    value === "true" ||
+    value === "1" ||
+    value === "open" ||
+    value === "on"
+  );
+
+}
+
+
+// ============================================================
+// PUMP STATE
+// ============================================================
+
+function isPumpOn(node) {
+
+  const value =
+    String(
+      node.pump
+    )
+    .toLowerCase()
+    .trim();
+
+
+  return (
+    value === "true" ||
+    value === "1" ||
+    value === "on" ||
+    value === "open"
+  );
+
+}
+
+
+// ============================================================
+// RENDER DASHBOARD
+// ============================================================
 
 function renderDashboard() {
-  const onlineIds = Object.keys(nodes).filter(id => isOnline(nodes[id]));
-  document.getElementById("nodeCount").textContent = onlineIds.length;
-  const grid = document.getElementById("customerGrid");
-  
-  if (onlineIds.length === 0) {
+
+  const onlineIds =
+    Object.keys(nodes)
+      .filter(
+        id =>
+          isOnline(
+            nodes[id]
+          )
+      );
+
+
+  document.getElementById(
+    "nodeCount"
+  ).textContent =
+    onlineIds.length;
+
+
+  const grid =
+    document.getElementById(
+      "customerGrid"
+    );
+
+
+  if (
+    onlineIds.length === 0
+  ) {
+
     grid.innerHTML = `
-      <div class="col-span-full bg-slate-800 rounded-xl p-8 text-center border border-slate-700/50">
-        <p class="text-slate-400">Waiting for online nodes...</p>
-      </div>`;
+
+      <div
+        class="col-span-full
+               bg-slate-800
+               rounded-xl
+               p-10
+               text-center
+               border border-slate-700"
+      >
+
+        <p class="text-slate-400">
+          Waiting for online nodes...
+        </p>
+
+      </div>
+
+    `;
+
     return;
   }
-  
-  grid.innerHTML = onlineIds.map(id => createNodeCard(nodes[id])).join("");
+
+
+  grid.innerHTML =
+    onlineIds
+      .map(
+        id =>
+          createNodeCard(
+            nodes[id]
+          )
+      )
+      .join("");
+
 }
+
+
+// ============================================================
+// CREATE NODE CARD
+// ============================================================
 
 function createNodeCard(node) {
-  const id = node.id;
-  const online = isOnline(node);
-  const flow = Number(node.flow || 0).toFixed(2);
-  const total = Number(node.total || 0).toFixed(2);
-  const m1 = Number(node.m1 || node.moist1 || 0).toFixed(0);
-  const m2 = Number(node.m2 || node.moist2 || 0).toFixed(0);
-  const temp = Number(node.temp || 0).toFixed(1);
-  const hum = Number(node.hum || 0).toFixed(1);
-  const rssi = node.rssi || 0;
-  
-  // Normalize valve & pump state strings
-  const valveVal = String(node.valve || "close").toLowerCase().trim();
-  const pumpVal = String(node.pump || "off").toLowerCase().trim();
-  
-  // Explicitly evaluate boolean states
-  const isValveOpen = ["open", "1", "true", "on"].includes(valveVal);
-  const isPumpOn = ["on", "1", "true", "open"].includes(pumpVal);
 
-  const { distanceCm, levelPct, levelNum } = getTankMetrics(node);
+  const id =
+    node.id;
 
-  let waterColor, badge, status;
-  if (levelNum < 10) {
-    waterColor = "linear-gradient(to top, #ef4444, #dc2626)";
-    badge = "bg-red-500/20 text-red-400 border-red-500";
-    status = "CRITICAL";
-  } else if (levelNum < 30) {
-    waterColor = "linear-gradient(to top, #f59e0b, #f97316)";
-    badge = "bg-amber-500/20 text-amber-400 border-amber-500";
-    status = "LOW";
-  } else if (levelNum < 70) {
-    waterColor = "linear-gradient(to top, #22d3ee, #3b82f6)";
-    badge = "bg-cyan-500/20 text-cyan-400 border-cyan-500";
-    status = "NORMAL";
-  } else {
-    waterColor = "linear-gradient(to top, #60a5fa, #2563eb)";
-    badge = "bg-blue-500/20 text-blue-300 border-blue-500";
-    status = "FULL";
-  }
 
-  // Persistent Status Indicators:
-  // OPEN/ON  => Green Badge + Green Dot
-  // CLOSED/OFF => Red Badge + Red Dot
-  const valveBadgeClass = isValveOpen 
-    ? "bg-green-500/20 text-green-400 border-green-500/40" 
-    : "bg-red-500/20 text-red-400 border-red-500/40";
-  const valveDotClass = isValveOpen 
-    ? "bg-green-500 shadow-[0_0_6px_#22c55e]" 
-    : "bg-red-500 shadow-[0_0_6px_#ef4444]";
+  const online =
+    isOnline(node);
 
-  const pumpBadgeClass = isPumpOn 
-    ? "bg-green-500/20 text-green-400 border-green-500/40" 
-    : "bg-red-500/20 text-red-400 border-red-500/40";
-  const pumpDotClass = isPumpOn 
-    ? "bg-green-500 shadow-[0_0_6px_#22c55e]" 
-    : "bg-red-500 shadow-[0_0_6px_#ef4444]";
+
+  const flow =
+    Number(
+      node.flow || 0
+    ).toFixed(2);
+
+
+  const total =
+    Number(
+      node.total || 0
+    ).toFixed(2);
+
+
+  const m1 =
+    Number(
+      node.m1 ??
+      node.moist1 ??
+      0
+    ).toFixed(0);
+
+
+  const m2 =
+    Number(
+      node.m2 ??
+      node.moist2 ??
+      0
+    ).toFixed(0);
+
+
+  const temp =
+    Number(
+      node.temp ??
+      node.temperature ??
+      0
+    ).toFixed(1);
+
+
+  const hum =
+    Number(
+      node.hum ??
+      node.humidity ??
+      0
+    ).toFixed(1);
+
+
+  const rssi =
+    node.rssi ??
+    0;
+
+
+  // ----------------------------------------------------------
+  // ACTUAL STATES
+  // ----------------------------------------------------------
+
+  const valveOpen =
+    isValveOpen(node);
+
+
+  const pumpOn =
+    isPumpOn(node);
+
+
+  // ----------------------------------------------------------
+  // VALVE COLOURS
+  // ----------------------------------------------------------
+
+  const valveClass =
+    valveOpen
+      ? "green-status"
+      : "red-status";
+
+
+  const valveDot =
+    valveOpen
+      ? "green-dot"
+      : "red-dot";
+
+
+  const valveText =
+    valveOpen
+      ? "OPEN"
+      : "CLOSED";
+
+
+  // ----------------------------------------------------------
+  // PUMP COLOURS
+  // ----------------------------------------------------------
+
+  const pumpClass =
+    pumpOn
+      ? "green-status"
+      : "red-status";
+
+
+  const pumpDot =
+    pumpOn
+      ? "green-dot"
+      : "red-dot";
+
+
+  const pumpText =
+    pumpOn
+      ? "ON"
+      : "OFF";
+
 
   return `
-  <div class="bg-slate-800 border border-slate-700/80 rounded-xl p-3 shadow-lg flex flex-col justify-between">
-    <!-- Node Header -->
-    <div class="flex justify-between items-center border-b border-slate-700/60 pb-2 mb-2">
+
+  <div
+    class="card
+           bg-slate-800
+           border border-slate-700
+           rounded-xl
+           p-4
+           shadow-lg"
+  >
+
+    <!-- ================================================= -->
+    <!-- HEADER -->
+    <!-- ================================================= -->
+
+    <div
+      class="flex justify-between items-center
+             border-b border-slate-700
+             pb-3 mb-3"
+    >
+
       <div>
-        <h2 class="text-sm font-bold leading-none">Customer ${id}</h2>
-        <p class="text-[10px] text-slate-400 mt-0.5">Node ID: #${id}</p>
+
+        <h2
+          class="text-lg font-bold"
+        >
+          Customer ${id}
+        </h2>
+
+        <p
+          class="text-xs text-slate-400"
+        >
+          Node ID: #${id}
+        </p>
+
       </div>
-      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${online ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}">
-        ${online ? 'ONLINE' : 'OFFLINE'}
+
+
+      <span
+        class="
+          px-2 py-1
+          rounded-full
+          text-[10px]
+          font-bold
+          ${online
+            ? "green-status"
+            : "red-status"}
+          border
+        "
+      >
+
+        ${online
+          ? "ONLINE"
+          : "OFFLINE"}
+
       </span>
+
     </div>
 
-    <!-- Flow & Total Water Usage -->
-    <div class="grid grid-cols-2 gap-2 mb-2">
-      <div class="bg-slate-900/80 rounded-lg p-2 text-center border border-slate-700/40">
-        <p class="text-[9px] text-slate-400 font-medium">FLOW RATE</p>
-        <div class="text-base font-extrabold text-cyan-400 leading-tight">${flow} <span class="text-[10px] font-normal text-slate-400">L/min</span></div>
-      </div>
-      <div class="bg-slate-900/80 rounded-lg p-2 text-center border border-slate-700/40">
-        <p class="text-[9px] text-slate-400 font-medium">TOTAL USAGE</p>
-        <div class="text-base font-extrabold text-blue-400 leading-tight">${total} <span class="text-[10px] font-normal text-slate-400">L</span></div>
-      </div>
-    </div>
 
-    <!-- Ultrasonic Water Tank -->
-    <div class="bg-slate-900/80 rounded-lg p-2.5 mb-2 border border-slate-700/50">
-      <div class="flex justify-between items-center mb-2">
-        <span class="text-[10px] font-bold text-slate-300">ULTRASONIC TANK</span>
-        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border ${badge}">${status} ${levelPct}%</span>
-      </div>
-      <div class="flex gap-3 items-center">
-        <div style="width:55px; height:75px; background:#1e293b; border:2px solid #475569; border-radius:6px; position:relative; overflow:hidden;" class="shrink-0 shadow-inner">
-          <div class="water-fill" style="height:${levelPct}%; background:${waterColor};">
-            <div class="tank-wave"></div>
-          </div>
-        </div>
-        <div class="flex-1 space-y-1">
-          <div class="flex justify-between items-center bg-slate-800/80 rounded px-2 py-1">
-            <span class="text-[10px] text-slate-400">Distance</span>
-            <span class="text-xs font-bold text-cyan-300">${distanceCm} cm</span>
-          </div>
-          <div class="flex justify-between items-center bg-slate-800/80 rounded px-2 py-1">
-            <span class="text-[10px] text-slate-400">Level</span>
-            <span class="text-xs font-bold text-white">${levelPct} %</span>
-          </div>
-          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1 border border-slate-700/30">
-            <div class="h-full transition-all duration-500" style="width:${levelPct}%; background:${waterColor};"></div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- ================================================= -->
+    <!-- FLOW -->
+    <!-- ================================================= -->
 
-    <!-- Moisture & Climate Sensors -->
-    <div class="grid grid-cols-4 gap-1.5 mb-2">
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
-        <p class="text-[9px] text-slate-400">Moist1</p>
-        <p class="text-green-400 font-bold text-xs">${m1}%</p>
-      </div>
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
-        <p class="text-[9px] text-slate-400">Moist2</p>
-        <p class="text-green-400 font-bold text-xs">${m2}%</p>
-      </div>
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
-        <p class="text-[9px] text-slate-400">Temp</p>
-        <p class="text-amber-400 font-bold text-xs">${temp}°C</p>
-      </div>
-      <div class="bg-slate-900/60 rounded p-1 text-center border border-slate-800">
-        <p class="text-[9px] text-slate-400">Hum</p>
-        <p class="text-cyan-400 font-bold text-xs">${hum}%</p>
-      </div>
-    </div>
+    <div
+      class="grid grid-cols-2 gap-2 mb-3"
+    >
 
-    <!-- Actuator Controls with Persistent Color Indicators -->
-    <div class="space-y-1.5">
-      <!-- Valve Control -->
-      <div class="bg-slate-900/60 rounded-lg p-1.5 flex justify-between items-center border border-slate-800">
-        <div class="flex items-center gap-1.5 ml-1">
-          <span class="text-[11px] font-medium text-slate-300">Valve:</span>
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold ${valveBadgeClass}">
-            <span class="w-1.5 h-1.5 rounded-full ${valveDotClass}"></span>
-            ${isValveOpen ? 'OPEN' : 'CLOSED'}
+      <div
+        class="bg-slate-900
+               rounded-lg
+               p-3
+               text-center"
+      >
+
+        <p
+          class="text-xs text-slate-400"
+        >
+          FLOW RATE
+        </p>
+
+        <p
+          class="text-xl
+                 font-bold
+                 text-cyan-400"
+        >
+
+          ${flow}
+
+          <span
+            class="text-xs text-slate-400"
+          >
+            L/min
           </span>
-        </div>
-        <div class="flex gap-1">
-          <button onclick="sendCommand(${id},'open')" class="bg-green-600 hover:bg-green-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">OPEN</button>
-          <button onclick="sendCommand(${id},'close')" class="bg-red-600 hover:bg-red-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">CLOSE</button>
-        </div>
+
+        </p>
+
       </div>
 
-      <!-- Pump Control -->
-      <div class="bg-slate-900/60 rounded-lg p-1.5 flex justify-between items-center border border-slate-800">
-        <div class="flex items-center gap-1.5 ml-1">
-          <span class="text-[11px] font-medium text-slate-300">Pump:</span>
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold ${pumpBadgeClass}">
-            <span class="w-1.5 h-1.5 rounded-full ${pumpDotClass}"></span>
-            ${isPumpOn ? 'ON' : 'OFF'}
+
+      <div
+        class="bg-slate-900
+               rounded-lg
+               p-3
+               text-center"
+      >
+
+        <p
+          class="text-xs text-slate-400"
+        >
+          TOTAL WATER
+        </p>
+
+        <p
+          class="text-xl
+                 font-bold
+                 text-blue-400"
+        >
+
+          ${total}
+
+          <span
+            class="text-xs text-slate-400"
+          >
+            L
           </span>
-        </div>
-        <div class="flex gap-1">
-          <button onclick="sendCommand(${id},'pump_on')" class="bg-green-600 hover:bg-green-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">ON</button>
-          <button onclick="sendCommand(${id},'pump_off')" class="bg-red-600 hover:bg-red-500 active:scale-95 px-2.5 py-0.5 rounded font-bold text-[10px] transition shadow">OFF</button>
-        </div>
+
+        </p>
+
       </div>
+
     </div>
 
-    <!-- Signal Stats Footer -->
-    <div class="text-center text-[9px] text-slate-500 mt-2">
-      RSSI ${rssi} dBm | Sensor Node #${id}
+
+    <!-- ================================================= -->
+    <!-- SENSORS -->
+    <!-- ================================================= -->
+
+    <div
+      class="grid grid-cols-4 gap-2 mb-3"
+    >
+
+      <div
+        class="bg-slate-900
+               rounded-lg
+               p-2
+               text-center"
+      >
+
+        <p class="text-[10px] text-slate-400">
+          Moist1
+        </p>
+
+        <p class="font-bold text-green-400">
+          ${m1}%
+        </p>
+
+      </div>
+
+
+      <div
+        class="bg-slate-900
+               rounded-lg
+               p-2
+               text-center"
+      >
+
+        <p class="text-[10px] text-slate-400">
+          Moist2
+        </p>
+
+        <p class="font-bold text-green-400">
+          ${m2}%
+        </p>
+
+      </div>
+
+
+      <div
+        class="bg-slate-900
+               rounded-lg
+               p-2
+               text-center"
+      >
+
+        <p class="text-[10px] text-slate-400">
+          Temp
+        </p>
+
+        <p class="font-bold text-amber-400">
+          ${temp}°C
+        </p>
+
+      </div>
+
+
+      <div
+        class="bg-slate-900
+               rounded-lg
+               p-2
+               text-center"
+      >
+
+        <p class="text-[10px] text-slate-400">
+          Hum
+        </p>
+
+        <p class="font-bold text-cyan-400">
+          ${hum}%
+        </p>
+
+      </div>
+
     </div>
-  </div>`;
+
+
+    <!-- ================================================= -->
+    <!-- VALVE -->
+    <!-- ================================================= -->
+
+    <div
+      class="bg-slate-900
+             rounded-lg
+             p-3
+             mb-2
+             border border-slate-700"
+    >
+
+      <div
+        class="flex
+               justify-between
+               items-center"
+      >
+
+        <div
+          class="flex
+                 items-center
+                 gap-2"
+        >
+
+          <span
+            class="text-sm
+                   font-bold
+                   text-slate-300"
+          >
+            VALVE
+          </span>
+
+
+          <span
+            class="
+              inline-flex
+              items-center
+              gap-2
+              px-2
+              py-1
+              rounded-full
+              border
+              text-xs
+              font-bold
+              ${valveClass}
+            "
+          >
+
+            <span
+              class="dot ${valveDot}"
+            ></span>
+
+            ${valveText}
+
+          </span>
+
+        </div>
+
+
+        <div
+          class="flex gap-1"
+        >
+
+          <button
+            onclick="sendCommand(${id}, 'open')"
+            class="bg-green-600
+                   hover:bg-green-500
+                   px-3 py-1
+                   rounded
+                   text-xs
+                   font-bold"
+          >
+            OPEN
+          </button>
+
+
+          <button
+            onclick="sendCommand(${id}, 'close')"
+            class="bg-red-600
+                   hover:bg-red-500
+                   px-3 py-1
+                   rounded
+                   text-xs
+                   font-bold"
+          >
+            CLOSE
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- PUMP -->
+    <!-- ================================================= -->
+
+    <div
+      class="bg-slate-900
+             rounded-lg
+             p-3
+             border border-slate-700"
+    >
+
+      <div
+        class="flex
+               justify-between
+               items-center"
+      >
+
+        <div
+          class="flex
+                 items-center
+                 gap-2"
+        >
+
+          <span
+            class="text-sm
+                   font-bold
+                   text-slate-300"
+          >
+            PUMP
+          </span>
+
+
+          <span
+            class="
+              inline-flex
+              items-center
+              gap-2
+              px-2
+              py-1
+              rounded-full
+              border
+              text-xs
+              font-bold
+              ${pumpClass}
+            "
+          >
+
+            <span
+              class="dot ${pumpDot}"
+            ></span>
+
+            ${pumpText}
+
+          </span>
+
+        </div>
+
+
+        <div
+          class="flex gap-1"
+        >
+
+          <button
+            onclick="sendCommand(${id}, 'pump_on')"
+            class="bg-green-600
+                   hover:bg-green-500
+                   px-3 py-1
+                   rounded
+                   text-xs
+                   font-bold"
+          >
+            ON
+          </button>
+
+
+          <button
+            onclick="sendCommand(${id}, 'pump_off')"
+            class="bg-red-600
+                   hover:bg-red-500
+                   px-3 py-1
+                   rounded
+                   text-xs
+                   font-bold"
+          >
+            OFF
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- RSSI -->
+    <!-- ================================================= -->
+
+    <div
+      class="text-center
+             text-xs
+             text-slate-500
+             mt-3"
+    >
+
+      RSSI:
+      ${rssi} dBm
+
+    </div>
+
+  </div>
+
+  `;
+
 }
 
-function sendCommand(id, cmd) {
-  // Update state locally so the indicator turns/remains Green or Red immediately
-  if (nodes[id]) {
-    if (cmd === "open") nodes[id].valve = "open";
-    if (cmd === "close") nodes[id].valve = "close";
-    if (cmd === "pump_on") nodes[id].pump = "on";
-    if (cmd === "pump_off") nodes[id].pump = "off";
-    renderDashboard();
-  }
 
-  if (!mqttClient || !mqttClient.connected) {
-    console.warn("MQTT disconnected - state updated locally");
+// ============================================================
+// SEND COMMAND
+// ============================================================
+
+function sendCommand(
+  id,
+  command
+) {
+
+  if (
+    !mqttClient ||
+    !mqttClient.connected
+  ) {
+
+    console.warn(
+      "MQTT is not connected"
+    );
+
     return;
   }
-  
-  mqttClient.publish(MQTT_CMD_TOPIC, JSON.stringify({ id: Number(id), cmd: cmd }));
+
+
+  const message =
+    JSON.stringify({
+
+      id: Number(id),
+
+      cmd: command
+
+    });
+
+
+  console.log(
+    "Sending:",
+    message
+  );
+
+
+  mqttClient.publish(
+    MQTT_CMD_TOPIC,
+    message
+  );
+
 }
+
+
+// ============================================================
+// START MQTT
+// ============================================================
 
 connectMQTT();
 
-// Fallback demo data if no MQTT transmission received within 2s
-setTimeout(() => {
-  if (Object.keys(nodes).length === 0) {
-    processLiveData({
-      nodes: [
-        { id: 1, online: true, flow: 5.2, total: 120, ultrasonic: 20, tank_level: 80, m1: 60, m2: 65, temp: 24, hum: 60, rssi: -60, valve: "open", pump: "on" },
-        { id: 2, online: false, flow: 0, total: 45, ultrasonic: 70, tank_level: 30, m1: 30, m2: 35, temp: 26, hum: 55, rssi: -75, valve: "close", pump: "off" },
-        { id: 3, online: true, flow: 1.1, total: 200, ultrasonic: 95, tank_level: 5, m1: 20, m2: 22, temp: 28, hum: 50, rssi: -80, valve: "close", pump: "off" }
-      ]
-    });
-  }
-}, 2000);
 </script>
+
 </body>
 </html>
