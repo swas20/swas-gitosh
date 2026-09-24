@@ -71,14 +71,13 @@ function getTankMetrics(node){
 
 function processLiveData(data){
   if(!data||!Array.isArray(data.nodes)) return;
-  data.nodes.forEach(n=>{ if(n.id!=null) nodes[n.id]={...n}; });
+  data.nodes.forEach(n=>{ if(n.id!=null) nodes[n.id]={...nodes[n.id], ...n}; });
   renderDashboard();
 }
 
 function isOnline(n){ return n.online===true||n.online===1||n.online==="true"||n.online==="1"; }
 
 function renderDashboard(){
-  // Filter and display only nodes that are explicitly online
   const onlineIds=Object.keys(nodes).filter(id=>isOnline(nodes[id]));
   
   document.getElementById("nodeCount").textContent=onlineIds.length;
@@ -102,8 +101,14 @@ function createNodeCard(node){
   const temp=Number(node.temp||0).toFixed(1);
   const hum=Number(node.hum||0).toFixed(1);
   const rssi=node.rssi||0;
-  const valve=String(node.valve||"close").toLowerCase();
-  const pump=String(node.pump||"off").toLowerCase();
+  
+  // Standardize state checking
+  const valveVal = String(node.valve || "close").toLowerCase().trim();
+  const pumpVal = String(node.pump || "off").toLowerCase().trim();
+  
+  const isValveOpen = ["open", "1", "true", "on"].includes(valveVal);
+  const isPumpOn = ["on", "1", "true", "open"].includes(pumpVal);
+
   const {distanceCm,levelPct,levelNum}=getTankMetrics(node);
 
   let waterColor, badge, status;
@@ -112,10 +117,7 @@ function createNodeCard(node){
   else if(levelNum<70){ waterColor="linear-gradient(to top,#22d3ee,#3b82f6)"; badge="bg-cyan-500/20 text-cyan-400 border-cyan-500"; status="NORMAL"; }
   else { waterColor="linear-gradient(to top,#60a5fa,#2563eb)"; badge="bg-blue-500/20 text-blue-300 border-blue-500"; status="FULL"; }
 
-  // Valve & Pump State Handlers (Green = Open/On, Red = Closed/Off)
-  const isValveOpen = valve === "open" || valve === "1" || valve === "true" || valve === "on";
-  const isPumpOn = pump === "on" || pump === "1" || pump === "true" || pump === "open";
-
+  // Valve & Pump Dynamic Indicators
   const valveBadgeClass = isValveOpen 
     ? "bg-green-500/20 text-green-400 border-green-500/40" 
     : "bg-red-500/20 text-red-400 border-red-500/40";
@@ -227,7 +229,19 @@ function createNodeCard(node){
 }
 
 function sendCommand(id,cmd){
-  if(!mqttClient||!mqttClient.connected){alert("MQTT offline");return;}
+  // Immediately update local node state so indicator changes without waiting for server response
+  if(nodes[id]){
+    if(cmd === "open") nodes[id].valve = "open";
+    if(cmd === "close") nodes[id].valve = "close";
+    if(cmd === "pump_on") nodes[id].pump = "on";
+    if(cmd === "pump_off") nodes[id].pump = "off";
+    renderDashboard();
+  }
+
+  if(!mqttClient||!mqttClient.connected){
+    console.warn("MQTT offline - Command updated locally only");
+    return;
+  }
   mqttClient.publish(MQTT_CMD_TOPIC,JSON.stringify({id:Number(id),cmd:cmd}));
 }
 
